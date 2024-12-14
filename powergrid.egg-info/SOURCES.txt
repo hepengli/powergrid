@@ -1,0 +1,8 @@
+LICENSE.txt
+setup.py
+powergrid.egg-info/PKG-INFO
+powergrid.egg-info/SOURCES.txt
+powergrid.egg-info/dependency_links.txt
+powergrid.egg-info/not-zip-safe
+powergrid.egg-info/requires.txt
+powergrid.egg-info/top_level.txt

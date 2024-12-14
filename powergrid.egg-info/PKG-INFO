@@ -1,0 +1,12 @@
+Metadata-Version: 2.1
+Name: powergrid
+Version: 0.0.1
+Summary: Power Grid Environment
+Home-page: https://github.com/hepengli/powergrid
+Author: Hepeng Li
+Author-email: hepeng.li@maine.edu
+License-File: LICENSE.txt
+Requires-Dist: gym
+Requires-Dist: numpy-stl
+Requires-Dist: pandapower
+Requires-Dist: pypower
