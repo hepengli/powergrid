@@ -198,9 +198,11 @@ class GridEnv:
             self.safety += overloading + overvoltage + undervoltage
 
 
-""" Networked Power Grid Environment
+"""
+Networked Power Grid Environment
 """
 from abc import abstractmethod
+
 class NetworkedGridEnv(MultiAgentEnv):
     def __init__(self, env_config):
         self.env_config = env_config
@@ -208,7 +210,7 @@ class NetworkedGridEnv(MultiAgentEnv):
         self.type = env_config.get('type', 'AC')
         self._build_net()
         self._init_space()
-    
+
     @property
     def actionable_agents(self):
         return {n : a for n, a in self.possible_agents.items() 

@@ -15,23 +15,31 @@ class DeviceState:
         self.P = 0. # active power
         self.Q = 0. # reactive power
         self.on = 1 # operating status
-        self.Pmax = 1.
-        self.Pmin = -1.
-        self.Qmax = 1.
-        self.Qmin = -1.
     
     def get(self):
-        state = np.array([self.P, self.Q], dtype=np.float32)
+        state = np.array([], dtype=np.float32)
+        if hasattr(self, 'Pmax'):
+            state = np.append(state, self.P)
+        if hasattr(self, 'Qmax'):
+            state = np.append(state, self.Q)
         if hasattr(self, 'shutting'):
+            on_state = np.zeros(2, dtype=np.float32)
+            on_state[self.on] = 1
+            state = np.concatenate([state, on_state])
             state = np.append(state, self.shutting)
         if hasattr(self, 'starting'):
             state = np.append(state, self.starting)
         if hasattr(self, 'soc'):
             state = np.append(state, self.soc)
-        on_state = np.zeros(2, dtype=np.float32)
-        on_state[self.on] = 1
-        state = np.concatenate([state, on_state])
-        
+        if hasattr(self, 'max_step'):
+            state = np.append(state, self.step)
+        if hasattr(self, 'tap_max'):
+            on_state = np.zeros(self.tap_max, dtype=np.float32)
+            on_state[self.tap_position] = 1
+            state = np.append(state, on_state)
+        if hasattr(self, 'loading_percentage'):
+            state = np.append(state, self.loading_percentage / 100.)
+
         return state
 
 # action of the device
@@ -44,6 +52,13 @@ class Action:
         self.c = np.array([], dtype=np.float32)
         self.dim_c = 0
 
+    def sample(self):
+        if self.dim_c > 0:
+            lb, ub = self.range
+            self.c = np.random.uniform(lb, ub).astype(np.float32)
+        if self.dim_d > 0:
+            self.d = np.random.randint(self.dim_d)
+
 # properties of device
 class Device(object):
     def __init__(self):
@@ -53,8 +68,8 @@ class Device(object):
         # script behavior to execute
         self.action_callback = None
         # cost and safety
-        self.cost = 0
-        self.safety = 0
+        self.cost = 0.
+        self.safety = 0.
         # action space
         self.action_space = []
         self.action_shape = 0
@@ -70,11 +85,11 @@ class DG(Device):
                  sn_mva=np.nan, 
                  min_pf=None, 
                  leading=None, 
-                 cost_curve_coefs=[0,0,0], 
+                 cost_curve_coefs=[0.,0.,0.], 
                  startup_time=None, 
                  shutdown_time=None, 
-                 startup_cost=0, 
-                 shutdown_cost=0, 
+                 startup_cost=0., 
+                 shutdown_cost=0., 
                  type='fossil', 
                  dt=1):
     
@@ -91,14 +106,10 @@ class DG(Device):
         self.leading = leading
         self.cost_curve_coefs = cost_curve_coefs
         self.dt = dt
-        self.state.Pmax = max_p_mw
-        self.state.Pmin = min_p_mw
-        
+
         if not np.isnan(sn_mva):
             self.min_q_mvar = - np.sqrt(sn_mva**2 - max_p_mw**2)
             self.max_q_mvar = np.sqrt(sn_mva**2 - max_p_mw**2)
-            self.state.Qmax = self.max_q_mvar
-            self.state.Qmin = self.min_q_mvar
         if min_pf is not None:
             self.min_pf = min_pf
         if startup_time is not None:
@@ -106,48 +117,42 @@ class DG(Device):
             self.shutdown_time = shutdown_time
             self.startup_cost = startup_cost
             self.shutdown_cost = shutdown_cost
+            self.state.Pmax = self.max_p_mw
+            self.state.Pmin = self.min_p_mw
+            self.state.Qmax = self.max_q_mvar
+            self.state.Qmin = self.min_q_mvar
             self.state.shutting = 0
             self.state.starting = 0
 
-        self.reset()
+        self.set_action_space()
 
-    def set_action_space(self, rnd=None):
-        rnd = np.random if rnd is None else rnd
+    def set_action_space(self):
         # action spaces
-        if self.type == 'fossil':
-            if not np.isnan(self.sn_mva) or not np.isnan(self.max_q_mvar):
-                low = [self.min_p_mw, self.min_q_mvar]
-                high = [self.max_p_mw, self.max_q_mvar]
-            else:
-                low, high = [self.min_p_mw], [self.max_p_mw]
-            self.action.range = np.array([low, high], dtype=np.float32)
-            self.action.c = rnd.uniform(low, high)
-        else: # Renewable
-            if not np.isnan(self.sn_mva) or not np.isnan(self.max_q_mvar):
-                low, high = [self.min_q_mvar], [self.max_q_mvar]
-                self.action.range = np.array([low, high], dtype=np.float32)
-                self.action.c = rnd.uniform(low, high)
+        if not np.isnan(self.sn_mva) or not np.isnan(self.max_q_mvar):
+            low = [self.min_p_mw, self.min_q_mvar]
+            high = [self.max_p_mw, self.max_q_mvar]
+        else:
+            low, high = [self.min_p_mw], [self.max_p_mw]
+        self.action.range = np.array([low, high], dtype=np.float32)
+        self.action.dim_c = len(low)
+        self.action.sample()
 
         if hasattr(self, 'startup_time'):
             self.action.ncats = 2
             self.action.d = np.ones(1)
+            self.action.dim_d = 1
 
-    def update_state(self, scaling=1.0):
+    def update_state(self):
+        # self.feasible_action()
         # update uc status
         if self.action.d != None:
             self.update_uc_state()
-        
+
         # update P and Q
         if self.action.c.size == 2:
             self.state.P, self.state.Q = self.action.c
         if self.action.c.size == 1:
-            if self.type == 'fossil':
-                self.state.P = self.action.c[0]
-            else:
-                self.state.P = self.max_p_mw * scaling
-                self.state.Q = self.action.c[0]
-        if self.action.c.size == 0 and self.type != 'fossil':
-            self.state.P = self.max_p_mw * scaling
+            self.state.P = self.action.c[0]
 
     def update_uc_state(self):
         # cannot start up and shut down at the same time
@@ -201,14 +206,36 @@ class DG(Device):
             if hasattr(self, 'min_pf'):
                 self.safety += max(0, self.min_pf - abs(self.state.P / S))
 
-    def reset(self, rnd=None, scaling=1.0):
-        self.set_action_space(rnd)
-        self.update_state(scaling)
+    def reset(self, rnd=None):
+        # update P and Q
+        if self.action.c.size == 2:
+            self.state.P = 0.0
+            self.state.Q = 0.0
+        if self.action.c.size == 1:
+            self.state.P = 0.0
 
+        # update uc status
+        if self.action.d != None:
+            self.state.shutting = 0
+            self.state.starting = 0
+            self.state.on = 1
+
+    def feasible_action(self):
+        if self.action.dim_c == 2:
+            P, Q = self.action.c
+            Q_max = np.sqrt(self.sn_mva ** 2 - P ** 2)
+            Q = np.clip(Q, -Q_max, Q_max)
+            self.action.c[1] = Q
 
 # properties of energy storage devices
 class ESS(Device):
-    def __init__(self, name, bus, min_p_mw, max_p_mw, max_e_mwh, 
+    def __init__(self, 
+                 name, 
+                 bus, 
+                 min_p_mw, 
+                 max_p_mw, 
+                 capacity,
+                 max_e_mwh=1.0, 
                  min_e_mwh=0.0, 
                  init_soc=0.5, 
                  min_q_mvar=np.nan, 
@@ -216,17 +243,19 @@ class ESS(Device):
                  sn_mva=np.nan, 
                  ch_eff=0.98, 
                  dsc_eff=0.98, 
-                 cost_curve_coefs=[0,0,0], 
+                 cost_curve_coefs=[0.,0.,0.], 
                  dt=1):
         super(ESS, self).__init__()
         # properties
         self.type = 'ESS'
         self.name = name
         self.bus = bus
+        self.capacity = capacity
         self.min_p_mw = min_p_mw
         self.max_p_mw = max_p_mw
         self.min_e_mwh = min_e_mwh
         self.max_e_mwh = max_e_mwh
+        assert min_e_mwh > 0 and max_e_mwh < capacity
         self.min_q_mvar = min_q_mvar
         self.max_q_mvar = max_q_mvar
         self.sn_mva = sn_mva
@@ -235,18 +264,15 @@ class ESS(Device):
         self.dsc_eff = dsc_eff
         self.cost_curve_coefs = cost_curve_coefs
         self.init_soc = init_soc
-        self.min_soc = min_e_mwh / max_e_mwh
-        self.max_soc = 1
-        self.state.Pmax = max_p_mw
-        self.state.Pmin = min_p_mw
+        self.min_soc = min_e_mwh / capacity
+        self.max_soc = max_e_mwh / capacity
+        self.state.soc = init_soc
         if not np.isnan(sn_mva):
             self.min_q_mvar = - np.sqrt(sn_mva**2 - max_p_mw**2)
             self.max_q_mvar = np.sqrt(sn_mva**2 - max_p_mw**2)
-            self.state.Qmax = self.max_q_mvar
-            self.state.Qmin = self.min_q_mvar
 
-        self.reset()
-    
+        self.set_action_space()
+
     def set_action_space(self):
         # action spaces
         if not np.isnan(self.sn_mva) or not np.isnan(self.max_q_mvar):
@@ -255,7 +281,8 @@ class ESS(Device):
         else:
             low, high = [self.min_p_mw], [self.max_p_mw]
         self.action.range = np.array([low, high], dtype=np.float32)
-        self.action.c = np.random.uniform(low, high)
+        self.action.dim_c = len(low)
+        self.action.sample()
 
     def update_state(self):
         # self.feasible_action()
@@ -264,7 +291,7 @@ class ESS(Device):
             self.state.P, self.state.Q = self.action.c
         else:
             self.state.P = self.action.c[0]
-            
+
         if self.state.P >= 0: # charging
             self.state.soc += self.state.P * self.ch_eff * self.dt / self.max_e_mwh
         else: # discharging
@@ -273,7 +300,7 @@ class ESS(Device):
     def update_cost_safety(self):
         # quadratic cost
         a, b, c, *_ = self.cost_curve_coefs
-        self.cost = a * abs(self.state.P)
+        self.cost = a * abs(self.state.P) * self.dt
         # step safety
         safety = 0
         if not np.isnan(self.sn_mva):
@@ -285,7 +312,7 @@ class ESS(Device):
         if self.state.soc < self.min_soc:
             safety += self.min_soc - self.state.soc
 
-        self.safety = safety
+        self.safety = safety * self.dt
 
     def reset(self, rnd=None, init_soc=None):
         rnd = np.random if rnd is None else rnd
@@ -293,8 +320,13 @@ class ESS(Device):
             self.state.soc = rnd.uniform(self.min_soc, self.max_soc)
         else:
             self.state.soc = init_soc
-        self.set_action_space()
-        self.update_state()
+
+        if self.action.c.size > 1:
+            self.state.P = 0.0
+            self.state.Q = 0.0
+        else:
+            self.state.P = 0.0
+
         self.cost, self.safety = 0, 0
 
     def feasible_action(self):
@@ -320,36 +352,37 @@ class RES(Device):
                  cost_curve_coefs=[0,0,0], 
                  dt=1):
         super(RES, self).__init__()
-        assert source in ['SOLAR', 'WIND']
+        assert source in ['solar', 'wind']
         self.type = source
         self.name = name
         self.bus = bus
         self.sn_mva = sn_mva
+        self.max_p_mw = sn_mva,
+        self.min_p_mw = 0.,
+        self.state.Pmax = self.max_p_mw
+        self.state.Pmin = self.min_p_mw
         self.max_q_mvar = max_q_mvar
         self.min_q_mvar = min_q_mvar
         self.cost_curve_coefs = cost_curve_coefs
         self.dt = dt
-        # cost and safety
-        self.cost = 0
-        self.safety = 0
 
         self.set_action_space()
-        self.update_state(0.0)
 
     def set_action_space(self):
         # action spaces
         if not np.isnan(self.max_q_mvar):
             low, high = self.min_q_mvar, self.max_q_mvar
             self.action.range = np.array([low, high], dtype=np.float32)
-            # self.action.dim_c = 1
-            self.action.c = np.random.uniform(low, high)
+            self.action.dim_c = len(low)
+            self.action.sample()
         else:
             self.action_callback = True
 
-    def update_state(self, scaling):
-        assert 0 <= scaling <= 1
-        # update state
-        self.state.P = self.sn_mva * scaling
+    def update_state(self, scaling=None):
+        if scaling is not None:
+            assert 0. <= scaling <= 1.
+            # update state
+            self.state.P = self.sn_mva * scaling
         if self.action.c.size > 0:
             self.state.Q = self.action.c
 
@@ -362,32 +395,37 @@ class RES(Device):
             else:
                 self.safety = 0
 
+    def reset(self, rnd=None):
+        self.state.P = 0.0
+        if self.action.c.size > 0:
+            self.state.Q = 0.0
+
 # properties of capacitor device
 class Shunt(Device):
-    def __init__(self, name, bus, q_mvar, max_step=1):
+    def __init__(self, name, bus, q_mvar, step=1, max_step=1):
         super(Shunt, self).__init__()
         # properties
         self.type = 'SCB'
         self.name = name
         self.bus = bus
         self.q_mvar = q_mvar
+        self.step = step
         self.max_step = max_step
-        # cost and safety
-        self.cost = 0
-        self.safety = 0
+        self.state.max_step = max_step
         # action spaces
         self.action.ncats = max_step + 1
         self.action.dim_d = 1
-        self.state.Qmax = q_mvar * max_step
 
     def update_state(self):
-        self.state.step = self.action.d[0]
+        step = self.action.d[0]
+        self.state.step = np.zeros(self.max_step)
+        self.state.step[step] = 1
 
     def update_cost_safety(self):
         pass
 
-    def reset(self, rnd):
-        self.state.Q = 0
+    def reset(self, rnd=None):
+        self.step = 0
 
 # properties of switch device
 class Switch(Device):
@@ -409,59 +447,52 @@ class Switch(Device):
     def update_cost_safety(self):
         pass
 
-    def reset(self, rnd):
+    def reset(self, rnd=None):
         self.state.closed = True
 
 # properties of substation device
 class Transformer(Device):
-    def __init__(self, name, type, fbus, tbus, 
+    def __init__(self, name, 
                  sn_mva=None, 
                  tap_max=None, 
                  tap_min=None, 
                  dt=1):
         super(Transformer, self).__init__()
         # properties
-        self.type = type # 'TAP' or 'Trafo'
         self.name = name
-        self.fbus = fbus
-        self.tbus = tbus
         self.sn_mva = sn_mva
         self.tap_max = tap_max
         self.tap_min = tap_min
         self.dt = dt
         # state variables
-        self.state.loading = 0
+        self.state.loading_percentage = 0
         self.state.tap_position = 0
-        # cost and safety
-        self.cost = 0
-        self.safety = 0
         # action spaces
         if tap_max is not None:
+            self.state.tap_max = tap_max
             self.action.ncats = tap_max - tap_min + 1
             self.action.dim_d = 1
-        else:
-            self.action_callback = True
 
     def update_state(self):
         if self.tap_max is not None:
             self.state.tap_position = self.action.d[0] + self.tap_min
 
-    def update_cost_safety(self, loading):
+    def update_cost_safety(self, loading_percentage):
         # update state
-        self.state.loading = loading
+        self.state.loading_percentage = loading_percentage
         # update safety
-        if loading > 100:
-            self.safety = (loading - 100) / 100
+        if loading_percentage > 100:
+            self.safety = (loading_percentage - 100) / 100
         else:
             self.safety = 0
 
-    def reset(self, rnd):
-        self.state.loading = 0
+    def reset(self, rnd=None):
+        self.state.loading_percentage = 0
         self.state.tap_position = 0
 
 # properties of main grid Device
 class Grid(Device):
-    def __init__(self, name, bus, sn_mva, sell_discount=1, dt=1):
+    def __init__(self, name, bus, sn_mva, sell_discount=1., dt=1):
         super(Grid, self).__init__()
         # properties
         self.type = 'GRID'
@@ -474,32 +505,27 @@ class Grid(Device):
         self.state.P = 0
         self.state.Q = 0
         self.state.price = 0
-        # cost and safety
-        self.cost = 0
-        self.safety = 0
         # not need action
         self.action_callback = True
 
-    def update_state(self, price, P, Q=0):
+    def update_state(self, *, price=None, P=None, Q=None):
         # update state
-        self.state.P = P
-        self.state.Q = Q
-        self.state.price = price
+        if P is not None:
+            self.state.P = P
+        if Q is not None:
+            self.state.Q = Q
+        if price is not None:
+            self.state.price = price
 
     def update_cost_safety(self):
         # update cost
         if self.state.P > 0:
             self.cost = self.state.P * self.state.price * self.dt
         else:
-            self.cost = self.state.P * self.state.price * self.sell_discount * self.dt
-        # update safety
-        S = np.sqrt(self.state.P**2 + self.state.Q**2)
-        if S > self.sn_mva:
-            self.safety = (S - self.sn_mva) / self.sn_mva
-        else:
-            self.safety = 0
+            self.cost = self.state.P * self.state.price * \
+                        self.sell_discount * self.dt
 
-    def reset(self, rnd):
+    def reset(self, rnd=None):
         self.state.P = 0
         self.state.Q = 0
         self.state.price = 0

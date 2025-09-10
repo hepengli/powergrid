@@ -40,13 +40,12 @@ def IEEE13Bus(name=''):
     pp.create_line(net, bus_632, bus_645, length_km=0.1524, std_type='CF-603', name='{}Line 1'.format(name))
     pp.create_line(net, bus_632, bus_633, length_km=0.1524, std_type='CF-602', name='{}Line 2'.format(name))
     pp.create_line(net, bus_645, bus_646, length_km=0.0914, std_type='CF-603', name='{}Line 3'.format(name))
-    pp.create_line(net, bus_650, bus_632, length_km=0.6096, std_type='CF-601', name='{}Line 4'.format(name))
-    pp.create_line(net, bus_684, bus_652, length_km=0.2438, std_type='CF-607', name='{}Line 5'.format(name))
-    pp.create_line(net, bus_632, bus_671, length_km=0.6096, std_type='CF-601', name='{}Line 6'.format(name))
-    pp.create_line(net, bus_671, bus_684, length_km=0.0914, std_type='CF-604', name='{}Line 7'.format(name))
-    pp.create_line(net, bus_671, bus_680, length_km=0.3048, std_type='CF-601', name='{}Line 8'.format(name))
-    pp.create_line(net, bus_684, bus_611, length_km=0.0914, std_type='CF-605', name='{}Line 9'.format(name))
-    pp.create_line(net, bus_692, bus_675, length_km=0.1524, std_type='CF-606', name='{}Line 10'.format(name))
+    pp.create_line(net, bus_684, bus_652, length_km=0.2438, std_type='CF-607', name='{}Line 4'.format(name))
+    pp.create_line(net, bus_632, bus_671, length_km=0.6096, std_type='CF-601', name='{}Line 5'.format(name))
+    pp.create_line(net, bus_671, bus_684, length_km=0.0914, std_type='CF-604', name='{}Line 6'.format(name))
+    pp.create_line(net, bus_671, bus_680, length_km=0.3048, std_type='CF-601', name='{}Line 7'.format(name))
+    pp.create_line(net, bus_684, bus_611, length_km=0.0914, std_type='CF-605', name='{}Line 8'.format(name))
+    pp.create_line(net, bus_692, bus_675, length_km=0.1524, std_type='CF-606', name='{}Line 9'.format(name))
 
     pp.create_switch(net, bus=bus_671,  element=bus_692, et='b', type="LS", z_ohm=0.0, name='{}Switch 1'.format(name))
 
@@ -57,7 +56,7 @@ def IEEE13Bus(name=''):
                                           tap_side='lv', tap_neutral=0, tap_max=2, tap_min=-2, 
                                           tap_step_percent=2.5, tap_pos=0, tap_phase_shifter=False,
                                           name='{}Substation'.format(name))
-    
+
     # Traformer
     pp.create_transformer_from_parameters(net, bus_633, bus_634, sn_mva=0.5, vn_hv_kv=4.16,
                                           vn_lv_kv=0.48, vkr_percent=1.1, vk_percent=2.0,

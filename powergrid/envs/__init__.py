@@ -24,11 +24,6 @@ register(
     max_episode_steps=24,
 )
 register(
-    id='ieee123ddpg-v0',
-    entry_point='powergrid.single_agent_envs.ieee123_ddpg:IEEE123BusSystemDDPG',
-    max_episode_steps=24,
-)
-register(
     id='networked_mgs-v1',
     entry_point='powergrid.multi_agent_envs.networked_mgs:NetworkedMGSystems',
     max_episode_steps=24,
