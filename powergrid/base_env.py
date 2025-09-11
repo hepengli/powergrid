@@ -8,82 +8,9 @@ from typing import Dict, Tuple, Iterable, Any, Optional, TypeVar
 import gymnasium as gym
 from gymnasium.spaces import Box, MultiDiscrete, Discrete, Dict as SpaceDict
 
-from powergrid.envs.utils import attach_device_to_net
+from powergrid.utils.utils import attach_device_to_net
 
 ObsType = TypeVar("ObsType")
-
-class NormalizeActionWrapper(gym.Wrapper):
-    """
-    Accepts agent actions in [-1, 1] for the continuous part and maps them
-    to env.action_space's true [low, high]. Discrete parts pass through.
-
-    Supports:
-      - Box
-      - Dict({"continuous": Box, "discrete": Discrete|MultiDiscrete})
-    """
-
-    def __init__(self, env):
-        # Retrieve the action space
-        action_space = env.action_space
-
-        if isinstance(action_space, Box):
-            self.low, self.high = action_space.low, action_space.high
-
-            # What the agent sees: always [-1, 1]
-            self.action_space = Box(
-                low=-1.0, 
-                high=1.0, 
-                shape=action_space.shape, 
-                dtype=np.float32
-            )
-
-        elif isinstance(action_space, SpaceDict):
-            # Mixed dict: expect "continuous" and optional "discrete"
-            assert "continuous" in action_space.spaces, \
-                "Expected a 'continuous' key in Dict action space."
-            continuous_space = action_space.spaces["continuous"]
-            assert isinstance(continuous_space, Box), \
-                "'continuous' must be a Box space."
-
-            # Keep discrete part as-is if present
-            action_space.spaces["continuous"] = Box(
-                low=-1.0, 
-                high=1.0, 
-                shape=continuous_space.shape, 
-                dtype=np.float32
-            )
-
-        else:
-            raise TypeError(
-                "ScaleFromUnitAction only supports Box or \
-                    Dict({'continuous': Box, ...})."
-            )
-
-        # Call the parent constructor, so we can access self.env later
-        super(NormalizeActionWrapper, self).__init__(env)
-
-    def rescale_action(self, scaled_action):
-        """
-        Rescale the action from [-1, 1] to [low, high]
-        (no need for symmetric action space)
-        :param scaled_action: (np.ndarray)
-        :return: (np.ndarray)
-        """
-        return self.low + (0.5 * (scaled_action + 1.0) * (self.high - self.low))
-
-    def reset(self, **kwargs):
-        """
-        Reset the environment
-        """
-        return self.env.reset(**kwargs)
-
-    def step(self, action):
-        """
-        :param action: ([float] or int) Action taken by the agent
-        """
-        # Rescale action from [-1, 1] to original [low, high] interval
-        rescaled_action = self.rescale_action(action)
-        return self.env.step(rescaled_action)
 
 
 class GridBaseEnv(gym.Env, metaclass=abc.ABCMeta):
@@ -144,8 +71,7 @@ class GridBaseEnv(gym.Env, metaclass=abc.ABCMeta):
         # Ensure PP elements exist for devices; record table+index
         self._pp_refs: Dict[str, Tuple[str, int]] = {}
         for name, dev in self.devices.items():
-            if hasattr(dev, "reset"):
-                dev.reset(rnd=self.np_random)
+            dev.reset(rnd=self.np_random)
             tbl, idx = attach_device_to_net(self.net, self.area, dev)
             self._pp_refs[name] = (tbl, idx)
 
@@ -178,10 +104,8 @@ class GridBaseEnv(gym.Env, metaclass=abc.ABCMeta):
         return obs, info
 
     def step(self, action):
-        low, high = self.action_space.low, self.action_space.high
-        scaled_action = low + (0.5 * (action + 1.0) * (high - low))
         # set actions into device objects
-        self._set_action(scaled_action)
+        self._set_action(action)
         self._push_devices_to_net()
 
         # solve power flow
@@ -197,7 +121,7 @@ class GridBaseEnv(gym.Env, metaclass=abc.ABCMeta):
 
         reward_scale = float(self.cfg.get("reward_scale", 1.0))
         safety_scale = float(self.cfg.get("safety_scale", 0.0))
-        max_penalty = float(self.cfg.get("max_penalty", None))
+        max_penalty = float(self.cfg.get("max_penalty", 0.0)) or None
 
         reward *= reward_scale
         reward -= np.clip(safety * safety_scale, 0.0, max_penalty)
@@ -294,7 +218,7 @@ class GridBaseEnv(gym.Env, metaclass=abc.ABCMeta):
                     len(self.net.res_trafo)
                 ):
                     loading = self.net.res_trafo.at[idx, "loading_percent"]
-                dev.update_cost_safety(loading)
+                dev.update_cost_safety(loading_percentage=loading)
             elif dev.__class__.__name__ == "Grid":
                 P, Q = self.net.res_ext_grid.values[0]
                 dev.update_state(P=P, Q=Q)
@@ -389,7 +313,7 @@ class GridBaseEnv(gym.Env, metaclass=abc.ABCMeta):
 
         # device states
         for dev in self.devices.values():
-            obs = np.concatenate([obs, dev.state.get().astype(np.float32)])
+            obs = np.concatenate([obs, dev.state.as_vector().astype(np.float32)])
 
         # bus voltages (vm, va) after PF
         if hasattr(self.net, "res_bus") and len(self.net.res_bus) > 0:
@@ -414,10 +338,6 @@ class GridBaseEnv(gym.Env, metaclass=abc.ABCMeta):
             line_loading = np.zeros(len(self.net.line), dtype=np.float32)
 
         obs = np.concatenate([obs, (line_loading / 100.)])
-
-        # hour = np.zeros(self.episode_length, dtype=np.float32)
-        # hour[self.t % self.episode_length] = 1.0
-        # obs = np.concatenate([obs, hour]).astype(np.float32)
 
         return obs.astype(np.float32)
 

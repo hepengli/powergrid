@@ -5,9 +5,9 @@ import pandapower as pp
 from os.path import dirname, abspath
 from collections import OrderedDict
 
-from powergrid.envs.base_env import GridBaseEnv
+from powergrid.base_env import GridBaseEnv
 from powergrid.networks.ieee13 import IEEE13Bus
-from powergrid.core import *
+from powergrid.devices import *
 
 def read_data(train, load_area, renew_area, price_area):
     dir = dirname(dirname(dirname(dirname(abspath(__file__)))))
@@ -23,7 +23,6 @@ def read_data(train, load_area, renew_area, price_area):
     }
 
 class IEEE13Env(GridBaseEnv):
-    @override
     def _build_net(self):
         self.area = "MG1"
         net = IEEE13Bus(self.area)
@@ -101,3 +100,11 @@ class IEEE13Env(GridBaseEnv):
         self.safety = safety
 
         return reward, safety
+
+
+if __name__ == '__main__':
+    from powergrid.envs.single_agent.my_env import IEEE13Env
+    env = IEEE13Env(env_config={})
+    obs, info = env.reset()
+    action = env.action_space.sample()
+    obs, reward, terminated, truncated, info = env.step(action)

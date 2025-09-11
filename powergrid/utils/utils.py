@@ -5,6 +5,53 @@ from typing import Dict, Tuple, Iterable, Any, Optional
 import gymnasium as gym
 from gymnasium.spaces import Box, Discrete, MultiDiscrete, Dict as SpaceDict
 
+
+class NormalizeActionWrapper(gym.Wrapper):
+    """
+    Map agent actions in [-1,1] for the continuous part to the env's true [low, high].
+    Discrete parts pass through unchanged.
+
+    Supports:
+      - Box
+      - Dict({"continuous": Box, "discrete": Discrete|MultiDiscrete})
+    """
+
+    def __init__(self, env: gym.Env):
+        super().__init__(env)
+        act = env.action_space
+
+        if isinstance(act, Box):
+            self._low, self._high = act.low, act.high
+            self.action_space = Box(low=-1.0, high=1.0, shape=act.shape, dtype=np.float32)
+
+        elif isinstance(act, SpaceDict) and isinstance(act.spaces.get("continuous"), Box):
+            box = act.spaces["continuous"]
+            self._low, self._high = box.low, box.high
+            # keep discrete as-is; only scale the continuous box
+            self.action_space = SpaceDict({
+                "continuous": Box(low=-1.0, high=1.0, shape=box.shape, dtype=np.float32),
+                **{k: v for k, v in act.spaces.items() if k != "continuous"},
+            })
+        else:
+            raise TypeError("NormalizeActionWrapper requires Box or Dict({'continuous': Box, ...}).")
+
+    @staticmethod
+    def _scale(x: np.ndarray, low: np.ndarray, high: np.ndarray) -> np.ndarray:
+        return low + (0.5 * (x + 1.0) * (high - low))
+
+    def step(self, action):
+        if isinstance(self.action_space, Box):
+            action = self._scale(np.asarray(action, dtype=np.float32), self._low, self._high)
+        else:
+            c = np.asarray(action.get("continuous", []), dtype=np.float32)
+            c = self._scale(c, self._low, self._high)
+            action = {**action, "continuous": c}
+        return self.env.step(action)
+
+    def reset(self, **kwargs):
+        return self.env.reset(**kwargs)
+
+
 def pp_get_idx_safe(net, table: str, name: str) -> Optional[int]:
     try:
         return int(pp.get_element_index(net, table, name))
