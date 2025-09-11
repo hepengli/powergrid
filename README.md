@@ -53,9 +53,9 @@ print("reward=", reward, "converged=", info.get("converged"))
 - **Continuous:** concatenated device controls (e.g., DG P/Q, ESS P/Q, RES Q)  
 - **Discrete:** optional categoricals (e.g., transformer taps)  
 
-**Exposed as:**
-- pure continuous → `Box`  
-- mixed → `Dict({"continuous": Box, "discrete": Discrete|MultiDiscrete})`  
+- **Exposed as:**
+    - pure continuous → `Box`  
+    - mixed → `Dict({"continuous": Box, "discrete": Discrete|MultiDiscrete})`  
 
 **Tip:** wrap with `NormalizeActionWrapper` if your agent outputs values in `[-1, 1]`;  
 the environment automatically rescales to true physical ranges internally.
