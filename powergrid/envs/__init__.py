@@ -1,4 +1,4 @@
-from gym.envs.registration import register
+from gymnasium.envs.registration import register
 # from .ieee34 import IEEE34BusSystem
 # from .ieee123 import IEEE123BusSystem
 # from .ieee123_ddpg import IEEE123BusSystemDDPG
