@@ -1,19 +1,21 @@
 # PowerGrid Gym Environment
 
-A lightweight, production-style **Gymnasium** environment for **power grid control** built on **pandapower** with a modular set of **device models** (DG/RES/ESS/Shunt/Transformer/Grid). It’s designed for Reinforcement Learning and Multi-Agent Reinforcement Learning research: clean action/observation spaces, centralized safety metrics, pluggable rewards, and tidy code structure.
+A lightweight, production-style **Gymnasium** environment for **power grid control**, built on [pandapower](https://www.pandapower.org/).  
+It provides modular device models (DG, RES, ESS, Shunt, Transformer, Grid) with clean action/observation spaces, centralized safety metrics, and pluggable rewards — designed for Reinforcement Learning (RL) and Multi-Agent RL research.
 
 ---
 
 ## Highlights
 
-- **Gymnasium-compatible** single-agent env (`GridBaseEnv`)
-- **Pandapower** integration with idempotent device→network attachment
-- **Mixed actions**: continuous (`Box`) + optional discrete (`Discrete`/`MultiDiscrete`) via a `Dict` action space
-- **Action normalization** wrapper so agents act in `[-1, 1]`
-- **Safety framework** (`SafetySpec`, `total_safety`) to mix penalties (over-rating, Power Factor, State-Of-Charge, but voltage, ling loading, etc.)
-- **Device library**: `DG`, `RES` (solar/wind), `ESS`, `Shunt`, `Transformer` (OLTC), `Grid`
-- **Cost helpers**: quadratic, piecewise linear, ramping, tap wear, energy settlement
-- **Unit tests** for devices and grid logic
+- ⚡ **Plug-and-play devices**: `DG`, `RES` (solar/wind), `ESS`, `Shunt`, `Transformer` (OLTC), `Grid`, `Switch`
+- 🔌 **Pandapower integration** with idempotent device → network attachment
+- 🧩 **Gymnasium-compatible** single-agent base (`GridBaseEnv`)
+- 🎛️ **Mixed action spaces**: continuous (`Box`) and discrete (`Discrete` / `MultiDiscrete`) combined in a `Dict`
+- 🔄 **NormalizeActionWrapper**: agents act in `[-1, 1]`, environment rescales to physical ranges
+- 🛡️ **Safety framework** (`SafetySpec`, `total_safety`) for penalties: over-rating, power factor, SOC, voltage, line loading, etc.
+- 💰 **Cost helpers**: quadratic, piecewise linear, ramping, tap wear, energy settlement
+- ✅ **Unit tests** for devices and environment logic
+- 🧪 **RL-ready**: works with Stable-Baselines3, RLlib, and custom Gym agents
 
 ---
 
@@ -28,19 +30,32 @@ conda activate powergrid
 pip install -U pip
 pip install -e .
 
-# Manual setup with pip
+# Or direct setup with pip
 pip install -r requirements.txt
 ```
 
 # Quick Start
+```bash
 from powergrid.envs.single_agent.ieee13_env import IEEE13Env
 
 # Create and wrap: agent acts in [-1,1] for the continuous part
 env = IEEE13Env({"episode_length": 24, "train": True})
-
 obs, info = env.reset()
-done = False
-while not done:
-    action = env.action_space.sample()
-    obs, reward, terminated, truncated, info = env.step(action)
-    print("reward=", reward, "converged=", info.get("converged"))
+
+# Take a random step
+action = env.action_space.sample()
+obs, reward, terminated, truncated, info = env.step(action)
+print("reward=", reward, "converged=", info.get("converged"))
+```
+
+## Action Space
+
+- **Continuous:** concatenated device controls (e.g., DG P/Q, ESS P/Q, RES Q)  
+- **Discrete:** optional categoricals (e.g., transformer taps)  
+
+**Exposed as:**
+- pure continuous → `Box`  
+- mixed → `Dict({"continuous": Box, "discrete": Discrete|MultiDiscrete})`  
+
+**Tip:** wrap with `NormalizeActionWrapper` if your agent outputs values in `[-1, 1]`;  
+the environment automatically rescales to true physical ranges internally.
