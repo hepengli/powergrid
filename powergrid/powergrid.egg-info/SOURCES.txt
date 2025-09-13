@@ -1,14 +1,6 @@
 LICENSE.txt
 README.md
 setup.py
-powergrid/__init__.py
-powergrid/base_env.py
-powergrid.egg-info/PKG-INFO
-powergrid.egg-info/SOURCES.txt
-powergrid.egg-info/dependency_links.txt
-powergrid.egg-info/not-zip-safe
-powergrid.egg-info/requires.txt
-powergrid.egg-info/top_level.txt
 powergrid/core/__init__.py
 powergrid/core/actions.py
 powergrid/core/state.py
@@ -29,6 +21,12 @@ powergrid/networks/ieee13.py
 powergrid/networks/ieee34.py
 powergrid/networks/imped2seq.py
 powergrid/networks/lines.py
+powergrid/powergrid.egg-info/PKG-INFO
+powergrid/powergrid.egg-info/SOURCES.txt
+powergrid/powergrid.egg-info/dependency_links.txt
+powergrid/powergrid.egg-info/not-zip-safe
+powergrid/powergrid.egg-info/requires.txt
+powergrid/powergrid.egg-info/top_level.txt
 powergrid/utils/__init__.py
 powergrid/utils/cost.py
 powergrid/utils/safety.py

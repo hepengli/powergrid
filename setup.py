@@ -14,8 +14,8 @@ setup(
     author_email="hepeng.li@maine.edu",
     license="MIT",
     python_requires=">=3.10",
-    package_dir={"": "powergrid"},                  # <— src layout
-    packages=find_packages(where="powergrid", exclude=("tests", "docs")),
+    packages=find_packages(),
+    # packages=find_packages(where="powergrid", exclude=("tests", "docs")),
     include_package_data=True,
     zip_safe=False,
     install_requires=[
