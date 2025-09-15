@@ -59,3 +59,48 @@ print("reward=", reward, "converged=", info.get("converged"))
 
 **Tip:** wrap with `NormalizeActionWrapper` if your agent outputs values in `[-1, 1]`;  
 the environment automatically rescales to true physical ranges internally.
+
+powergrid/
+├─ README.md
+├─ setup.py
+├─ LICENSE.txt
+├─ environment.yml
+├─ data/.   # time-series (load/solar/wind/price)
+├─ micpopt/.
+├─ tests/
+│  ├─ test_generator.py
+│  ├─ test_storage.py
+│  ├─ test_grid.py
+│  └─ test_safety.py
+└─ src/
+   └─ powergrid/
+      ├─ __init__.py
+      ├─ utils/
+      │  ├─ __init__.py
+      │  ├─ cost.py               # quadratic/piecewise, ramping, energy, tap wear
+      │  ├─ safety.py             # SafetySpec, total_safety, s_over_rating, pf_penalty, soc_bounds
+      │  └─ utils.py              # helper functions
+      ├─ core/
+      │  ├─ __init__.py
+      │  ├─ state.py              # DeviceState as_vector / feature packing
+      │  └─ actions.py            # Action (continuous/discrete sampling, ranges)
+      ├─ devices/
+      │  ├─ __init__.py
+      │  ├─ base.py               # Device base class (cost/safety fields)
+      │  ├─ generator.py          # DG, RES (uses utils.cost & utils.safety)
+      │  ├─ storage.py            # ESS (SOC dynamics, feasible_action)
+      │  ├─ shunt.py              # Shunt (controllable steps if applicable)
+      │  ├─ transformer.py        # OLTC Transformer (tap cost; safety via SafetySpec)
+      │  ├─ grid.py               # Grid interface (price/P/Q settlement)
+      │  └─ switch.py             # Switch (callback/boolean state)
+      ├─ networks/
+      │  ├─ __init__.py
+      │  └─ ieee13.py             # IEEE 13 bus system
+      │  └─ ieee34.py             # IEEE 34 bus system
+      │  └─ ...
+      └─ envs/
+         ├─ __init__.py
+         ├─ base_env.py           # Gymnasium Env base
+         └─ single_agent/         # Examples of single-agent gym environments
+            ├─ __init__.py
+            └─ ieee13_env.py      # IEEE13Env (_build_net, _reward_and_safety)
