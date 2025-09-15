@@ -20,7 +20,7 @@ def IEEE34Bus(name=''):
     pp.create_std_type(net, CF304, name='CF-304', element='line')
 
     # Busses
-    # bus0 = pp.create_bus(net, name='Bus 0', vn_kv=69.0, type='n', zone='34_BUS')
+    # bus_0 = pp.create_bus(net, name='Bus 0', vn_kv=69.0, type='b', zone='34_BUS')
     bus_800 = pp.create_bus(net, name='{}Bus 800'.format(name), vn_kv=24.9, type='b', zone='34_BUS', max_vm_pu=1.05, min_vm_pu=0.95)
     bus_802 = pp.create_bus(net, name='{}Bus 802'.format(name), vn_kv=24.9, type='b', zone='34_BUS', max_vm_pu=1.05, min_vm_pu=0.95)
     bus_806 = pp.create_bus(net, name='{}Bus 806'.format(name), vn_kv=24.9, type='b', zone='34_BUS', max_vm_pu=1.05, min_vm_pu=0.95)
@@ -28,6 +28,7 @@ def IEEE34Bus(name=''):
     bus_810 = pp.create_bus(net, name='{}Bus 810'.format(name), vn_kv=24.9, type='b', zone='34_BUS', max_vm_pu=1.05, min_vm_pu=0.95)
     bus_812 = pp.create_bus(net, name='{}Bus 812'.format(name), vn_kv=24.9, type='b', zone='34_BUS', max_vm_pu=1.05, min_vm_pu=0.95)
     bus_814 = pp.create_bus(net, name='{}Bus 814'.format(name), vn_kv=24.9, type='b', zone='34_BUS', max_vm_pu=1.05, min_vm_pu=0.95)
+    bus_RG10 = pp.create_bus(net, name='{}Bus RG10'.format(name), vn_kv=24.9, type='b', zone='34_BUS', max_vm_pu=1.05, min_vm_pu=0.95)
     bus_850 = pp.create_bus(net, name='{}Bus 850'.format(name), vn_kv=24.9, type='b', zone='34_BUS', max_vm_pu=1.05, min_vm_pu=0.95)
     bus_816 = pp.create_bus(net, name='{}Bus 816'.format(name), vn_kv=24.9, type='b', zone='34_BUS', max_vm_pu=1.05, min_vm_pu=0.95)
     bus_818 = pp.create_bus(net, name='{}Bus 818'.format(name), vn_kv=24.9, type='b', zone='34_BUS', max_vm_pu=1.05, min_vm_pu=0.95)
@@ -39,6 +40,7 @@ def IEEE34Bus(name=''):
     bus_830 = pp.create_bus(net, name='{}Bus 830'.format(name), vn_kv=24.9, type='b', zone='34_BUS', max_vm_pu=1.05, min_vm_pu=0.95)
     bus_854 = pp.create_bus(net, name='{}Bus 854'.format(name), vn_kv=24.9, type='b', zone='34_BUS', max_vm_pu=1.05, min_vm_pu=0.95)
     bus_852 = pp.create_bus(net, name='{}Bus 852'.format(name), vn_kv=24.9, type='b', zone='34_BUS', max_vm_pu=1.05, min_vm_pu=0.95)
+    bus_RG11 = pp.create_bus(net, name='{}Bus RG11'.format(name), vn_kv=24.9, type='b', zone='34_BUS', max_vm_pu=1.05, min_vm_pu=0.95)
     bus_832 = pp.create_bus(net, name='{}Bus 832'.format(name), vn_kv=24.9, type='b', zone='34_BUS', max_vm_pu=1.05, min_vm_pu=0.95)
     bus_858 = pp.create_bus(net, name='{}Bus 858'.format(name), vn_kv=24.9, type='b', zone='34_BUS', max_vm_pu=1.05, min_vm_pu=0.95)
     bus_834 = pp.create_bus(net, name='{}Bus 834'.format(name), vn_kv=24.9, type='b', zone='34_BUS', max_vm_pu=1.05, min_vm_pu=0.95)
@@ -63,7 +65,7 @@ def IEEE34Bus(name=''):
     pp.create_line(net, bus_808, bus_810, length_km=1.769059, std_type='CF-303', name='{}Line 3'.format(name))
     pp.create_line(net, bus_808, bus_812, length_km=11.43000, std_type='CF-300', name='{}Line 4'.format(name))
     pp.create_line(net, bus_812, bus_814, length_km=9.061704, std_type='CF-300', name='{}Line 5'.format(name))
-    # pp.create_line(net, bus_814, bus_850, length_km=0.003048, std_type='CF-301', name=' {}Line 6'.format(name))
+    pp.create_line(net, bus_RG10, bus_850, length_km=0.003048, std_type='CF-301', name=' {}Line 6'.format(name))
     pp.create_line(net, bus_816, bus_818, length_km=0.521208, std_type='CF-302', name='{}Line 7'.format(name))
     pp.create_line(net, bus_816, bus_824, length_km=3.112008, std_type='CF-301', name='{}Line 8'.format(name))
     pp.create_line(net, bus_818, bus_820, length_km=14.67612, std_type='CF-302', name='{}Line 9'.format(name))
@@ -81,7 +83,7 @@ def IEEE34Bus(name=''):
     pp.create_line(net, bus_844, bus_846, length_km=1.109472, std_type='CF-301', name='{}Line 21'.format(name))
     pp.create_line(net, bus_846, bus_848, length_km=0.161544, std_type='CF-301', name='{}Line 22'.format(name))
     pp.create_line(net, bus_850, bus_816, length_km=0.094488, std_type='CF-301', name='{}Line 23'.format(name))
-    # pp.create_line(net, bus_852, bus_832, length_km=0.003048, std_type='CF-301', name='{}Line 24'.format(name))
+    pp.create_line(net, bus_RG11, bus_832, length_km=0.003048, std_type='CF-301', name='{}Line 24'.format(name))
     pp.create_line(net, bus_854, bus_856, length_km=7.110984, std_type='CF-303', name='{}Line 25'.format(name))
     pp.create_line(net, bus_854, bus_852, length_km=11.22578, std_type='CF-301', name='{}Line 26'.format(name))
     pp.create_line(net, bus_858, bus_864, length_km=0.493776, std_type='CF-302', name='{}Line 27'.format(name))
@@ -91,25 +93,25 @@ def IEEE34Bus(name=''):
     pp.create_line(net, bus_888, bus_890, length_km=3.218688, std_type='CF-300', name='{}Line 31'.format(name))
 
     # Regulator 1
-    pp.create_transformer_from_parameters(net, bus_814, bus_850, sn_mva=2.5, vn_hv_kv=24.9,
+    pp.create_transformer_from_parameters(net, bus_814, bus_RG10, sn_mva=2.5, vn_hv_kv=24.9,
                                           vn_lv_kv=24.9, vkr_percent=0.320088*2.5, vk_percent=0.357539*2.5,
                                           pfe_kw=0.0, i0_percent=0.0, shift_degree=0.0,
                                           tap_side='lv', tap_neutral=0, tap_max=16, tap_min=-16, 
-                                          tap_step_percent=0.625, tap_pos=16, tap_phase_shifter=False,
+                                          tap_step_percent=0.625, tap_pos=12, tap_phase_shifter=False,
                                           name='{}Regulator 1'.format(name))
     # Regulator 2
-    pp.create_transformer_from_parameters(net, bus_852, bus_832, sn_mva=2.5, vn_hv_kv=24.9,
+    pp.create_transformer_from_parameters(net, bus_852, bus_RG11, sn_mva=2.5, vn_hv_kv=24.9,
                                           vn_lv_kv=24.9, vkr_percent=0.320088*2.5, vk_percent=0.357539*2.5,
                                           pfe_kw=0.0, i0_percent=0.0, shift_degree=0.0,
                                           tap_side='lv', tap_neutral=0, tap_max=16, tap_min=-16, 
                                           tap_step_percent=0.625, tap_pos=16, tap_phase_shifter=False,
                                           name='{}Regulator 2'.format(name))
     # # Substation
-    # pp.create_transformer_from_parameters(net, bus0, bus_800, sn_mva=2.5, vn_hv_kv=69.0,
+    # pp.create_transformer_from_parameters(net, bus_0, bus_800, sn_mva=2.5, vn_hv_kv=69.0,
     #                                       vn_lv_kv=24.9, vkr_percent=1.0, vk_percent=8.062257,
     #                                       pfe_kw=0.0, i0_percent=0.0, shift_degree=0.0,
-    #                                       tap_side='lv', tap_neutral=0, tap_max=2, tap_min=-2, 
-    #                                       tap_step_percent=2.5, tap_pos=0, tap_phase_shifter=False,
+    #                                     #   tap_side='lv', tap_neutral=0, tap_max=2, tap_min=-2, 
+    #                                     #   tap_step_percent=2.5, tap_pos=0, tap_phase_shifter=False,
     #                                       name='{}Substation'.format(name))
     # Traformer
     pp.create_transformer_from_parameters(net, bus_832, bus_888, sn_mva=0.5, vn_hv_kv=24.9,
@@ -158,9 +160,9 @@ def IEEE34Bus(name=''):
     # pp.create_sgen(net, bus_826, p_mw=0., type='WP', name='WP 2', max_p_mw=0.1, min_p_mw=0, max_q_mvar=0, min_q_mvar=0)
     # pp.create_sgen(net, bus_838, p_mw=0., type='WP', name='WP 3', max_p_mw=0.1, min_p_mw=0, max_q_mvar=0, min_q_mvar=0)
 
-    # # Shunt capacity bank
-    # pp.create_shunt_as_capacitor(net, bus_840, q_mvar=-0.12, name='SCB 1', step=0, max_step=4, loss_factor=0.0)
-    # pp.create_shunt_as_capacitor(net, bus_864, q_mvar=-0.12, name='SCB 2', step=0, max_step=4, loss_factor=0.0)
+    # Shunt capacity bank
+    pp.create_shunt_as_capacitor(net, bus_844, q_mvar=-0.30, name='SCB 1', step=0, max_step=4, loss_factor=0.0)
+    pp.create_shunt_as_capacitor(net, bus_848, q_mvar=-0.45, name='SCB 2', step=0, max_step=4, loss_factor=0.0)
 
     # # # storage
     # pp.create_storage(net, bus_810, p_mw=0.0, max_e_mwh=2, sn_mva=1.0, soc_percent=50, min_e_mwh=0.2, name='Storage')
@@ -168,6 +170,8 @@ def IEEE34Bus(name=''):
     return net
 
 if __name__ == '__main__':
+    from powergrid.networks.ieee34 import IEEE34Bus
+    import pandapower as pp
     net = IEEE34Bus()
     pp.runpp(net)
     print(net.res_bus)

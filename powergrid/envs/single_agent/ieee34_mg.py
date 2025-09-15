@@ -6,7 +6,7 @@ from os.path import dirname, abspath
 from collections import OrderedDict
 
 from powergrid.base_env import GridBaseEnv
-from powergrid.networks.ieee13 import IEEE13Bus
+from powergrid.networks.ieee34 import IEEE34Bus
 from powergrid.devices import *
 
 def read_data(train, load_area, renew_area, price_area):
@@ -22,33 +22,45 @@ def read_data(train, load_area, renew_area, price_area):
         'price': dataset[train]['price'][price_area]
     }
 
-class IEEE13Env(GridBaseEnv):
+class IEEE34Env(GridBaseEnv):
     def _build_net(self):
         self.area = "MG1"
-        net = IEEE13Bus(self.area)
+        net = IEEE34Bus(self.area)
         # Register devices (names must be unique per area)
-        ess1 = ESS('ESS1', bus='Bus 645',
+        ess1 = ESS('ESS1', bus='Bus 810',
             min_p_mw=-0.5,
             max_p_mw=0.5,
             capacity=3.0,
             max_e_mwh=2.7,
             min_e_mwh=0.3,
         )
-        dg1 = DG('DG1', bus='Bus 675', 
+        ess2 = ESS('ESS2', bus='Bus 826',
+            min_p_mw=-0.4,
+            max_p_mw=0.4,
+            capacity=2.0,
+            max_e_mwh=1.8,
+            min_e_mwh=0.2,
+        )
+        dg1 = DG('DG1', bus='Bus 838', 
             min_p_mw=0.0, 
-            max_p_mw=0.66, 
-            sn_mva=1.0,
+            max_p_mw=0.4, 
+            sn_mva=0.5,
+            min_pf=0.8,
             cost_curve_coefs=[100, 51.6, 0.4615],
         )
-        dg2 = DG('DG2', bus='Bus 611', 
+        dg2 = DG('DG2', bus='Bus 890', 
             min_p_mw=0.0, 
             max_p_mw=0.50, 
             sn_mva=0.625, 
+            min_pf=0.8,
             cost_curve_coefs=[100, 72.4, 0.5011],
         )
-        pv1 = RES('PV1', bus='Bus 652', sn_mva=0.5, source='solar')
-        wt1 = RES('WT1', bus='Bus 645', sn_mva=0.5, source='wind')
-        grid = Grid("Grid", bus='Bus 650', sn_mva=5, sell_discount=0.9)
+        pv1 = RES('PV1', bus='Bus 826', sn_mva=0.1, source='solar')
+        pv2 = RES('PV2', bus='Bus 822', sn_mva=0.1, source='solar')
+        pv3 = RES('PV3', bus='Bus 890', sn_mva=0.1, source='solar')
+        wt1 = RES('WT1', bus='Bus 838', sn_mva=0.15, source='wind')
+        wt2 = RES('WT2', bus='Bus 810', sn_mva=0.15, source='wind')
+        grid = Grid("Grid", bus='Bus 800', sn_mva=2.5, sell_discount=0.9)
         trafos = []
         for index, row in net.trafo.iterrows():
             name, sn_mva = row["name"][len(self.area)+1:], row["sn_mva"]
@@ -56,17 +68,21 @@ class IEEE13Env(GridBaseEnv):
         # Let the base take care of attaching these to the net
         self.devices = OrderedDict([
             (ess1.name, ess1),
+            (ess2.name, ess2),
             (dg1.name, dg1),
             (dg2.name, dg2),
             (pv1.name, pv1),
+            (pv2.name, pv2),
+            (pv3.name, pv3),
             (wt1.name, wt1),
+            (wt2.name, wt2),
             (grid.name, grid),
             *trafos,
         ])
         self.net = net
 
         # Provide dataset series (T time steps)
-        self.dataset = read_data(self.train, 'AVA', 'NP15', '0096WD_7_N001')
+        self.dataset = read_data(self.train, 'AZPS', 'SP15', '0096WD_7_N001')
 
     def _reward_and_safety(self):
         """
@@ -103,8 +119,8 @@ class IEEE13Env(GridBaseEnv):
 
 
 if __name__ == '__main__':
-    from powergrid.envs.single_agent.my_env import IEEE13Env
-    env = IEEE13Env(env_config={})
+    from powergrid.envs.single_agent.ieee34_mg import IEEE34Env
+    env = IEEE34Env(env_config={})
     obs, info = env.reset()
     action = env.action_space.sample()
     obs, reward, terminated, truncated, info = env.step(action)

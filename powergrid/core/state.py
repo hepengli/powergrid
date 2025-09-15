@@ -49,7 +49,7 @@ class DeviceState:
         if self.Qmax is not None:
             state = np.append(state, self.Q)
         if self.price is not None:
-            state = np.append(state, float(self.price))
+            state = np.append(state, float(self.price) / 100.)
 
         if self.shutting is not None:
             on_state = np.zeros(2, dtype=np.float32)

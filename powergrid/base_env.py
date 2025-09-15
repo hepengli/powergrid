@@ -316,7 +316,7 @@ class GridBaseEnv(gym.Env, metaclass=abc.ABCMeta):
             obs = np.concatenate([obs, dev.state.as_vector().astype(np.float32)])
 
         # bus voltages (vm, va) after PF
-        if hasattr(self.net, "res_bus") and len(self.net.res_bus) > 0:
+        if hasattr(self.net, "res_bus") and self.net["converged"]:
             vm = self.net.res_bus["vm_pu"].values.astype(np.float32)
             va = self.net.res_bus["va_degree"].values.astype(np.float32)
         else:
@@ -331,7 +331,7 @@ class GridBaseEnv(gym.Env, metaclass=abc.ABCMeta):
         obs = np.concatenate([obs, (pq * scaling).ravel() / self.base_power])
 
         # line loading
-        if hasattr(self.net, "res_line") and len(self.net.res_line) > 0:
+        if hasattr(self.net, "res_line") and self.net["converged"]:
             line_loading = self.net.res_line[
                 "loading_percent"].values.astype(np.float32)
         else:
