@@ -61,10 +61,15 @@ print("reward=", reward, "converged=", info.get("converged"))
 the environment automatically rescales to true physical ranges internally.
 
 powergrid/
+
 ├── README.md
+
 ├── setup.py
+
 ├── LICENSE.txt
+
 ├── environment.yml
+
 ├── data/ # time-series (load/solar/wind/price)
 ├── micpopt/
 ├── tests/
