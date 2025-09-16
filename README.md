@@ -36,7 +36,7 @@ pip install -r requirements.txt
 
 # Quick Start
 ```bash
-from powergrid.envs.single_agent.ieee13_env import IEEE13Env
+from powergrid.envs.single_agent.ieee13_mg import IEEE13Env
 
 # Create and wrap: agent acts in [-1,1] for the continuous part
 env = IEEE13Env({"episode_length": 24, "train": True})
