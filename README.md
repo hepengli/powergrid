@@ -68,9 +68,6 @@ Below are the single-line diagrams of two networks:
 ### IEEE 13-Bus System
 
 <img src="docs/images/ieee13.png" alt="IEEE 13 Bus System" width="500"/>
-<img src="docs/images/ieee34.png" alt="IEEE 34 Bus System" width="700"/>
-
-![IEEE 13 Bus System](docs/images/ieee13.png)
 
 ### IEEE 34-Bus System
-![IEEE 34 Bus System](docs/images/ieee34.png)
+<img src="docs/images/ieee34.png" alt="IEEE 34 Bus System" width="700"/>
