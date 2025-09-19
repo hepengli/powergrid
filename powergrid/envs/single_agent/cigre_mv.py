@@ -21,31 +21,31 @@ def read_data(train, load_area, renew_area, price_area):
         'price': dataset[train]['price'][price_area]
     }
 
-class CIRGEMVEnv(GridBaseEnv):
+class CIGREMVEnv(GridBaseEnv):
     def _build_net(self):
-        self.area = "MG1"
+        self.area = ""
         net = pp.networks.create_cigre_network_mv(with_der="all")
         net.area = self.area
         # Register devices (names must be unique per area)
-        RFC_1 = DG('Residential fuel cell 1', bus='5', min_p_mw=0, max_p_mw=0.033, sn_mva=0.033, cost_curve_coefs=[100, 51.6, 0.5011])
-        RFC_2 = DG('Residential fuel cell 2', bus='10', min_p_mw=0, max_p_mw=0.014, sn_mva=0.014, cost_curve_coefs=[100, 72.4, 0.4615])
-        FC    = DG('Fuel cell', bus='9', min_p_mw=0, max_p_mw=0.212, sn_mva=0.212, cost_curve_coefs=[100, 40.7, 1.1532])
-        CHP   = DG('CHP diesel', bus='9', min_p_mw=0, max_p_mw=0.310, sn_mva=0.310, cost_curve_coefs=[100, 35.8, 1.3156])
-        PV_3 = RES('PV 3', source='SOLAR', bus='3', sn_mva=0.02, control_q=False)
-        PV_4 = RES('PV 4', source='SOLAR', bus='4', sn_mva=0.02, control_q=False)
-        PV_5 = RES('PV 5', source='SOLAR', bus='5', sn_mva=0.03, control_q=False)
-        PV_6 = RES('PV 6', source='SOLAR', bus='6', sn_mva=0.03, control_q=False)
-        PV_8 = RES('PV 8', source='SOLAR', bus='8', sn_mva=0.03, control_q=False)
-        PV_9 = RES('PV 9', source='SOLAR', bus='9', sn_mva=0.03, control_q=False)
-        PV_10 = RES('PV 10', source='SOLAR', bus='10', sn_mva=0.04, control_q=False)
-        PV_11 = RES('PV 11', source='SOLAR', bus='11', sn_mva=0.01, control_q=False)
-        WKA_7 = RES('WKA 7', source='WIND', bus='7', sn_mva=1.5, control_q=False)
-        BAT_1 = ESS('Battery 1', bus='5', min_p_mw=-0.6, max_p_mw=0.6, max_e_mwh=4, min_e_mwh=0.4, min_e_mwh=3.6)
-        BAT_2 = ESS('Battery 2', bus='10', min_p_mw=-0.2, max_p_mw=0.2, max_e_mwh=1, min_e_mwh=0.1, min_e_mwh=0.9)
-        GRID = Grid('GRID', bus='0', sn_mva=5000, sell_discount=0.9)
+        RFC_1 = DG('Residential fuel cell 1', bus='Bus 5', min_p_mw=0, max_p_mw=0.033, sn_mva=0.033, cost_curve_coefs=[100, 51.6, 0.5011])
+        RFC_2 = DG('Residential fuel cell 2', bus='Bus 10', min_p_mw=0, max_p_mw=0.014, sn_mva=0.014, cost_curve_coefs=[100, 72.4, 0.4615])
+        FC    = DG('Fuel cell', bus='Bus 9', min_p_mw=0, max_p_mw=0.212, sn_mva=0.212, cost_curve_coefs=[100, 40.7, 1.1532])
+        CHP   = DG('CHP diesel', bus='Bus 9', min_p_mw=0, max_p_mw=0.310, sn_mva=0.310, cost_curve_coefs=[100, 35.8, 1.3156])
+        PV_3 = RES('PV 3', source='solar', bus='Bus 3', sn_mva=0.02)
+        PV_4 = RES('PV 4', source='solar', bus='Bus 4', sn_mva=0.02)
+        PV_5 = RES('PV 5', source='solar', bus='Bus 5', sn_mva=0.03)
+        PV_6 = RES('PV 6', source='solar', bus='Bus 6', sn_mva=0.03)
+        PV_8 = RES('PV 8', source='solar', bus='Bus 8', sn_mva=0.03)
+        PV_9 = RES('PV 9', source='solar', bus='Bus 9', sn_mva=0.03)
+        PV_10 = RES('PV 10', source='solar', bus='Bus 10', sn_mva=0.04)
+        PV_11 = RES('PV 11', source='solar', bus='Bus 11', sn_mva=0.01)
+        WKA_7 = RES('WKA 7', source='wind', bus='Bus 7', sn_mva=1.5)
+        BAT_1 = ESS('Battery 1', bus='Bus 5', min_p_mw=-0.6, max_p_mw=0.6, capacity=4, min_e_mwh=0.4, max_e_mwh=3.6)
+        BAT_2 = ESS('Battery 2', bus='Bus 10', min_p_mw=-0.2, max_p_mw=0.2, capacity=1, min_e_mwh=0.1, max_e_mwh=0.9)
+        GRID = Grid('GRID', bus='Bus 0', sn_mva=5000, sell_discount=0.9)
         trafos = []
         for index, row in net.trafo.iterrows():
-            name, sn_mva = row["name"][len(self.area)+1:], row["sn_mva"]
+            name, sn_mva = row["name"], row["sn_mva"]
             trafos.append((name, Transformer(name=name, sn_mva=sn_mva)))
         # Let the base take care of attaching these to the net
         self.devices = OrderedDict([

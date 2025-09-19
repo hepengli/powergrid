@@ -61,10 +61,12 @@ def pp_get_idx_safe(net, table: str, name: str) -> Optional[int]:
 def attach_device_to_net(net, area_name: str, dev):
     """Create/find the pandapower element(s) for a device, return (table, idx)."""
     def _bus_id(bus_name):
-        return pp.get_element_index(net, "bus", f"{area_name} {bus_name}")
+        if len(area_name) > 0: 
+            bus_name = f"{area_name} {bus_name}"
+        return pp.get_element_index(net, "bus", bus_name)
 
     cls = dev.__class__.__name__
-    name = f"{area_name} {dev.name}"
+    name = f"{area_name} {dev.name}" if len(area_name) > 0 else dev.name
 
     if cls in ("DG", "RES"):
         # As sgen
