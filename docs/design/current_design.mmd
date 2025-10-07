@@ -1,0 +1,78 @@
+graph TB
+    subgraph "SETUP PHASE - Building Agents from Scratch"
+        User[User/Researcher] -->|1. Define Network| NetConfig[Network Configuration]
+        NetConfig -->|2. Create Devices| DevFactory[Device Factory]
+        
+        subgraph "Device Layer - Individual Agents"
+            DevFactory -->|instantiate| DG[DG Agent<br/>Diesel Generator]
+            DevFactory -->|instantiate| ESS[ESS Agent<br/>Battery Storage]
+            DevFactory -->|instantiate| RES[RES Agent<br/>Solar/Wind]
+            DevFactory -->|instantiate| Shunt[Shunt Agent<br/>Capacitor Bank]
+            DevFactory -->|instantiate| Grid[Grid Agent<br/>Utility Connection]
+        end
+        
+        DG --> DevDict[devices: OrderedDict]
+        ESS --> DevDict
+        RES --> DevDict
+        Shunt --> DevDict
+        Grid --> DevDict
+        
+        DevDict -->|3. Build Environment| Env[GridBaseEnv<br/>Coordinator Agent]
+        NetConfig -->|attach| Env
+        
+        Env -->|4. Register PP Elements| PPNet[PandaPower Network<br/>Physics Simulator]
+    end
+    
+    subgraph "RUNTIME PHASE - Single env.step() Execution Flow"
+        RL[RL Algorithm<br/>A2C/PPO] -->|step 1: global action| Env2[GridBaseEnv.step]
+        
+        Env2 -->|step 2: _set_action| ActionParser[Action Parser<br/>Slice & Distribute]
+        
+        ActionParser -->|"continuous[0:2]"| DG2[DG.action.c = vals]
+        ActionParser -->|"continuous[2:3]"| ESS2[ESS.action.c = vals]
+        ActionParser -->|"discrete[0:1]"| Shunt2[Shunt.action.d = vals]
+        
+        subgraph "Sub-Agent Action Taking"
+            DG2 -->|step 3a: update_state| DGLogic[DG Logic<br/>P = P_min + action*P_range<br/>Q = tan×P]
+            ESS2 -->|step 3b: update_state| ESSLogic[ESS Logic<br/>P = action × P_max<br/>SOC += P×Δt]
+            Shunt2 -->|step 3c: update_state| ShuntLogic[Shunt Logic<br/>step = action<br/>Q = step × q_mvar]
+        end
+        
+        DGLogic -->|step 4: _push_devices_to_net| PPNet2["PandaPower Network<br/>net.sgen.at[idx,'p_mw']=P"]
+        ESSLogic -->|step 4: _push_devices_to_net| PPNet2
+        ShuntLogic -->|step 4: _push_devices_to_net| PPNet2
+        
+        PPNet2 -->|step 5: _solve_pf| Solver[pp.runpp<br/>Power Flow Solver]
+        
+        Solver -->|step 6: results| Results[Network Results<br/>vm_pu, va_degree<br/>loading_percent]
+        
+        Results -->|step 7: _update_device_cost_safety| CostCalc[Cost & Safety Calculator]
+        
+        CostCalc -->|per-device cost| DGCost[DG.cost<br/>fuel_cost × P]
+        CostCalc -->|per-device safety| ESSCost[ESS.safety<br/>SOC bounds violation]
+        CostCalc -->|per-device safety| ShuntCost[Shunt.safety<br/>step limits]
+        
+        DGCost -->|step 8: _reward_and_safety| Aggregator[Reward Aggregator<br/>Σ rewards - Σ penalties]
+        ESSCost --> Aggregator
+        ShuntCost --> Aggregator
+        
+        Aggregator -->|step 9: return| FinalReward[Total Reward<br/>New Observation<br/>Terminated/Truncated]
+        
+        FinalReward -->|step 10: feedback| RL
+    end
+    
+    style User fill:#e1f5ff
+    style RL fill:#e1f5ff
+    style Env fill:#fff4e1
+    style Env2 fill:#fff4e1
+    style DG fill:#e8f5e9
+    style ESS fill:#e8f5e9
+    style RES fill:#e8f5e9
+    style Shunt fill:#e8f5e9
+    style Grid fill:#e8f5e9
+    style DG2 fill:#e8f5e9
+    style ESS2 fill:#e8f5e9
+    style Shunt2 fill:#e8f5e9
+    style PPNet fill:#f3e5f5
+    style PPNet2 fill:#f3e5f5
+    style Solver fill:#f3e5f5
