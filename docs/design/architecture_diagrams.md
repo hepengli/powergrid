@@ -415,9 +415,9 @@ flowchart TD
 
     subgraph "5. Cost & Safety"
         E1[For each Device:<br/>update_cost_safety]
-        E2[DG: cost = fuel_cost × P]
-        E3[ESS: safety = SOC_violation]
-        E4[Voltage: safety = |V - 1.0|]
+        E2["DG: cost = fuel_cost × P"]
+        E3["ESS: safety = SOC_violation"]
+        E4["Voltage: safety = abs V - 1.0"]
     end
 
     subgraph "6. Reward Computation"
@@ -517,8 +517,8 @@ graph LR
     end
 
     subgraph "Dataset Objects"
-        TSDataset[TimeseriesDataset<br/>load[t], solar[t], price[t]]
-        SpatialDS[SpatialDataset<br/>bus locations, topology]
+        TSDataset["TimeseriesDataset<br/>load(t), solar(t), price(t)"]
+        SpatialDS["SpatialDataset<br/>bus locations, topology"]
     end
 
     subgraph "Environment Integration"
@@ -527,9 +527,9 @@ graph LR
     end
 
     subgraph "Device Consumption"
-        RES[RES Device<br/>scaling = solar[t]]
-        Grid[Grid Device<br/>price = lmp[t]]
-        Load[Load Scaling<br/>net.load.scaling = load[t]]
+        RES["RES Device<br/>scaling = solar(t)"]
+        Grid["Grid Device<br/>price = lmp(t)"]
+        Load["Load Scaling<br/>net.load.scaling = load(t)"]
     end
 
     CAISO -->|download| Download
