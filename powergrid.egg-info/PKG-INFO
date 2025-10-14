@@ -2,13 +2,14 @@ Metadata-Version: 2.4
 Name: powergrid
 Version: 0.0.2
 Summary: Power Grid Gymnasium environment built on pandapower.
-Home-page: https://github.com/hepengli/powergrid
-Author: Hepeng Li
-Author-email: hepeng.li@maine.edu
+Author-email: Hepeng Li <hepeng.li@maine.edu>, Zhenlin Wang <zhenlin.wang.criss@gmail.com>
 License: MIT
+Project-URL: Homepage, https://github.com/hepengli/powergrid
 Project-URL: Source, https://github.com/hepengli/powergrid
 Project-URL: Issues, https://github.com/hepengli/powergrid/issues
-Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
 Classifier: Programming Language :: Python :: 3 :: Only
 Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent
@@ -20,24 +21,14 @@ Requires-Dist: gymnasium
 Requires-Dist: pandapower
 Requires-Dist: numpy
 Requires-Dist: pandas
+Requires-Dist: pyscipopt
+Requires-Dist: matplotlib
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
 Requires-Dist: ruff; extra == "dev"
 Requires-Dist: black; extra == "dev"
 Requires-Dist: mypy; extra == "dev"
-Dynamic: author
-Dynamic: author-email
-Dynamic: classifier
-Dynamic: description
-Dynamic: description-content-type
-Dynamic: home-page
-Dynamic: license
 Dynamic: license-file
-Dynamic: project-url
-Dynamic: provides-extra
-Dynamic: requires-dist
-Dynamic: requires-python
-Dynamic: summary
 
 # PowerGrid Gym Environment
 
@@ -62,22 +53,41 @@ It provides modular device models (DG, RES, ESS, Shunt, Transformer, Grid) with 
 
 ## Installation
 
-### Conda (recommended on macOS/Ubuntu)
+### Option 1: Install from PyPI (coming soon)
+
+```bash
+pip install powergrid
+```
+
+### Option 2: Install from source
+
+```bash
+# Clone the repository
+git clone https://github.com/hepengli/powergrid.git
+cd powergrid
+
+# Install in editable mode for development
+pip install -e .
+
+# Or install with dev dependencies
+pip install -e ".[dev]"
+```
+
+### Option 3: Conda environment (recommended for isolation)
 
 ```bash
 # Create an environment
 conda create -n powergrid python=3.12 -y
 conda activate powergrid
 pip install -U pip
-pip install -e .
 
-# Or direct setup with pip
-pip install -r requirements.txt
+# Install from source
+pip install -e .
 ```
 
 # Quick Start
 ```bash
-from powergrid.envs.single_agent.ieee13_env import IEEE13Env
+from powergrid.envs.single_agent.ieee13_mg import IEEE13Env
 
 # Create and wrap: agent acts in [-1,1] for the continuous part
 env = IEEE13Env({"episode_length": 24, "train": True})
@@ -100,3 +110,15 @@ print("reward=", reward, "converged=", info.get("converged"))
 
 **Tip:** wrap with `NormalizeActionWrapper` if your agent outputs values in `[-1, 1]`;  
 the environment automatically rescales to true physical ranges internally.
+
+## Example Networks
+
+This repository includes standard IEEE test systems used for demonstration and validation.  
+Below are the single-line diagrams of two networks:
+
+### IEEE 13-Bus System
+
+<img src="docs/images/ieee13.png" alt="IEEE 13 Bus System" width="500"/>
+
+### IEEE 34-Bus System
+<img src="docs/images/ieee34.png" alt="IEEE 34 Bus System" width="700"/>

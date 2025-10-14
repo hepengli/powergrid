@@ -1,7 +1,7 @@
 import numpy as np
 import pandapower as pp
 from pyscipopt import Model, quicksum
-from networks.ieee123 import IEEE123Bus
+from powergrid.networks.ieee123 import IEEE123Bus
 from matplotlib import pyplot as plt
 from pandapower.pypower.idx_bus import BUS_I, BASE_KV, PD, QD, GS, BS, VMAX, VMIN, BUS_TYPE, NONE, VM, VA, \
     CID, CZD, bus_cols, REF
@@ -10,7 +10,8 @@ from pandapower.pypower.idx_brch import F_BUS, T_BUS, BR_R, BR_X, BR_B, TAP, SHI
 
 def read_data():
     import pickle, os
-    f = open(os.path.join('../data','data2018-2020.pkl'), 'rb')
+    # Update path to point to data directory from new location
+    f = open(os.path.join(os.path.dirname(__file__), '../../data','data2018-2020.pkl'), 'rb')
     data = pickle.load(f)
     f.close()
     return data

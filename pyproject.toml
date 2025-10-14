@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "powergrid"
+version = "0.0.2"
+description = "Power Grid Gymnasium environment built on pandapower."
+readme = "README.md"
+authors = [
+    {name = "Hepeng Li", email = "hepeng.li@maine.edu"},
+    {name = "Zhenlin Wang", email = "zhenlin.wang.criss@gmail.com"}
+]
+license = {text = "MIT"}
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "gymnasium",
+    "pandapower",
+    "numpy",
+    "pandas",
+    "pyscipopt",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+    "black",
+    "mypy",
+]
+
+[project.urls]
+Homepage = "https://github.com/hepengli/powergrid"
+Source = "https://github.com/hepengli/powergrid"
+Issues = "https://github.com/hepengli/powergrid/issues"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["powergrid*"]
+exclude = ["tests*", "docs*", "build*", "dist*", "*.egg-info"]
