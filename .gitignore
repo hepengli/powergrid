@@ -145,3 +145,6 @@ wandb/*
 # Data files (to be moved after week 6)
 data/*.pkl
 data/.DS_Store
+
+# claude code
+.claude/
