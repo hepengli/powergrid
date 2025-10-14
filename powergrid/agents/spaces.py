@@ -4,7 +4,7 @@ This module provides helpers for composing heterogeneous agent spaces,
 partial observability, and action masking.
 """
 
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 import numpy as np
 import gymnasium as gym
 from gymnasium.spaces import Box, Discrete, MultiDiscrete, Dict as SpaceDict

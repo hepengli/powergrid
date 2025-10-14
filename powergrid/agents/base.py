@@ -43,7 +43,7 @@ class Observation:
         for key in sorted(self.local.keys()):
             val = self.local[key]
             if isinstance(val, (int, float)):
-                vec = np.append(vec, float(val))
+                vec = np.append(vec, np.float32(val))
             elif isinstance(val, np.ndarray):
                 vec = np.concatenate([vec, val.ravel().astype(np.float32)])
 
@@ -51,11 +51,11 @@ class Observation:
         for key in sorted(self.global_info.keys()):
             val = self.global_info[key]
             if isinstance(val, (int, float)):
-                vec = np.append(vec, float(val))
+                vec = np.append(vec, np.float32(val))
             elif isinstance(val, np.ndarray):
                 vec = np.concatenate([vec, val.ravel().astype(np.float32)])
 
-        return vec
+        return vec.astype(np.float32)
 
 
 @dataclass
