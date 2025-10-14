@@ -5,7 +5,8 @@ import numpy as np
 from gymnasium.spaces import Box
 
 from powergrid.agents.device_agent import DeviceAgent
-from powergrid.agents.base import Observation, RandomPolicy
+from powergrid.agents.base import Observation
+from powergrid.agents.policies import RandomPolicy
 from powergrid.devices.storage import ESS
 from powergrid.devices.generator import DG
 

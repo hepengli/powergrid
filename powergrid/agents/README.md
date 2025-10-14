@@ -103,7 +103,31 @@ coordinator.act(obs)  # Broadcasts price to subordinates
 - `SetpointProtocol`: Distribute power setpoints
 - Custom protocols via `Protocol` interface
 
-### 4. Observation & Message (`base.py`)
+### 4. Policies (`policies.py`)
+
+Decision-making policies for agents:
+
+```python
+from powergrid.agents import Policy, RandomPolicy
+
+# Random policy (for testing)
+policy = RandomPolicy(action_space, seed=42)
+
+# Custom policy
+class MPCPolicy(Policy):
+    def forward(self, observation):
+        # Implement control logic
+        return action
+
+    def reset(self):
+        pass
+```
+
+**Built-in Policies**:
+- `RandomPolicy`: Samples random actions from action space
+- Custom policies via `Policy` interface for RL, MPC, rule-based control
+
+### 5. Observation & Message (`base.py`)
 
 Structured data classes for observations and communication:
 
@@ -130,7 +154,7 @@ msg = Message(
 )
 ```
 
-### 5. Space Utilities (`spaces.py`)
+### 6. Space Utilities (`spaces.py`)
 
 Helpers for multi-agent action/observation spaces:
 
@@ -214,7 +238,8 @@ for agent in [ess_agent, dg_agent]:
 ### Example 3: Custom Policy
 
 ```python
-from powergrid.agents import DeviceAgent, Policy
+from powergrid.agents import DeviceAgent
+from powergrid.agents.policies import Policy
 
 class MPCPolicy(Policy):
     """Model Predictive Control policy."""
@@ -252,6 +277,7 @@ Individual test files:
 - `test_base_agent.py`: Tests for base Agent, Observation, Message
 - `test_device_agent.py`: Tests for DeviceAgent wrapper
 - `test_grid_agent.py`: Tests for GridCoordinatorAgent and protocols
+- Policies are tested via RandomPolicy in device/grid agent tests
 
 ## Design Principles
 

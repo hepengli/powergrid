@@ -9,7 +9,8 @@ import numpy as np
 import gymnasium as gym
 from gymnasium.spaces import Box, Dict as SpaceDict
 
-from .base import Agent, Observation, Policy, RandomPolicy
+from .base import Agent, Observation
+from .policies import Policy, RandomPolicy
 from ..devices.base import Device
 
 

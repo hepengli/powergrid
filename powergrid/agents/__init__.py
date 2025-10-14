@@ -1,6 +1,7 @@
 """Agent abstraction layer for multi-agent power grid control."""
 
-from .base import Agent, Observation, Message, AgentID, Policy, RandomPolicy
+from .base import Agent, Observation, Message, AgentID
+from .policies import Policy, RandomPolicy
 from .device_agent import DeviceAgent
 from .grid_agent import (
     GridCoordinatorAgent,
@@ -22,6 +23,7 @@ __all__ = [
     "Observation",
     "Message",
     "AgentID",
+    # Policies
     "Policy",
     "RandomPolicy",
     # Agent types

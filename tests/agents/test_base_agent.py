@@ -9,9 +9,8 @@ from powergrid.agents.base import (
     Agent,
     Observation,
     Message,
-    Policy,
-    RandomPolicy,
 )
+from powergrid.agents.policies import Policy, RandomPolicy
 
 
 class DummyAgent(Agent):
