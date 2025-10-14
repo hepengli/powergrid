@@ -2,6 +2,8 @@ gymnasium
 pandapower
 numpy
 pandas
+pyscipopt
+matplotlib
 
 [dev]
 pytest

@@ -1,9 +1,0 @@
-name: powergrid
-channels:
-  - conda-forge
-dependencies:
-  - python=3.12
-  - pandapower
-  - gymnasium
-  - numpy
-  - pandas
