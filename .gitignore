@@ -131,6 +131,7 @@ dmypy.json
 
 # Project Specific
 /artifacts/
+*.egg-info/*
 .DS_Store
 .idea/
 mlruns
