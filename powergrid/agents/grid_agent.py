@@ -12,127 +12,7 @@ from gymnasium.spaces import Box, Dict as SpaceDict
 from .base import Agent, Observation, Message, AgentID
 from .policies import Policy
 from .device_agent import DeviceAgent
-
-
-class Protocol:
-    """Abstract coordination protocol interface.
-
-    Protocols define how grid agents coordinate subordinate device agents.
-    Examples: price signals, setpoints, ADMM, droop control.
-    """
-
-    def coordinate(
-        self,
-        observations: Dict[AgentID, Observation],
-        coordinator_action: Optional[Any] = None,
-    ) -> Dict[AgentID, Dict[str, Any]]:
-        """Compute coordination signals for subordinate agents.
-
-        Args:
-            observations: Observations from all subordinate agents
-            coordinator_action: Optional action from coordinator's policy
-
-        Returns:
-            Dict mapping agent_id to coordination signal (e.g., setpoint, price)
-        """
-        raise NotImplementedError
-
-
-class NoProtocol(Protocol):
-    """No coordination - subordinate agents act independently."""
-
-    def coordinate(
-        self,
-        observations: Dict[AgentID, Observation],
-        coordinator_action: Optional[Any] = None,
-    ) -> Dict[AgentID, Dict[str, Any]]:
-        """Return empty coordination signals.
-
-        Args:
-            observations: Ignored
-            coordinator_action: Ignored
-
-        Returns:
-            Empty dict for each agent
-        """
-        return {agent_id: {} for agent_id in observations}
-
-
-class PriceSignalProtocol(Protocol):
-    """Price-based coordination via marginal price signals.
-
-    Coordinator broadcasts a price, subordinate agents optimize locally.
-    """
-
-    def __init__(self, initial_price: float = 50.0):
-        """Initialize price signal protocol.
-
-        Args:
-            initial_price: Initial electricity price ($/MWh)
-        """
-        self.price = initial_price
-
-    def coordinate(
-        self,
-        observations: Dict[AgentID, Observation],
-        coordinator_action: Optional[Any] = None,
-    ) -> Dict[AgentID, Dict[str, Any]]:
-        """Broadcast price signal to all agents.
-
-        Args:
-            observations: Observations from subordinates
-            coordinator_action: New price (if provided)
-
-        Returns:
-            Price signal for each agent
-        """
-        # Update price from coordinator action if provided
-        if coordinator_action is not None:
-            if isinstance(coordinator_action, dict):
-                self.price = coordinator_action.get("price", self.price)
-            else:
-                self.price = float(coordinator_action)
-
-        # Broadcast to all agents
-        return {
-            agent_id: {"price": self.price}
-            for agent_id in observations
-        }
-
-
-class SetpointProtocol(Protocol):
-    """Setpoint-based coordination.
-
-    Coordinator computes power setpoints, subordinate agents track them.
-    """
-
-    def coordinate(
-        self,
-        observations: Dict[AgentID, Observation],
-        coordinator_action: Optional[Any] = None,
-    ) -> Dict[AgentID, Dict[str, Any]]:
-        """Distribute setpoints to subordinate agents.
-
-        Args:
-            observations: Observations from subordinates
-            coordinator_action: Dict of {agent_id: setpoint}
-
-        Returns:
-            Setpoint for each agent
-        """
-        if coordinator_action is None:
-            # No setpoint, agents act independently
-            return {agent_id: {} for agent_id in observations}
-
-        # Distribute setpoints
-        signals = {}
-        for agent_id in observations:
-            if agent_id in coordinator_action:
-                signals[agent_id] = {"setpoint": coordinator_action[agent_id]}
-            else:
-                signals[agent_id] = {}
-
-        return signals
+from .protocols import VerticalProtocol, NoProtocol
 
 
 class GridAgent(Agent):
@@ -155,7 +35,7 @@ class GridAgent(Agent):
         self,
         agent_id: AgentID,
         subordinates: List[DeviceAgent],
-        protocol: Optional[Protocol] = None,
+        vertical_protocol: Optional[VerticalProtocol] = None,
         policy: Optional[Policy] = None,
         centralized: bool = False,
     ):
@@ -164,7 +44,7 @@ class GridAgent(Agent):
         Args:
             agent_id: Unique identifier
             subordinates: List of device agents to coordinate
-            protocol: Coordination protocol (defaults to NoProtocol)
+            vertical_protocol: Protocol for coordinating subordinate devices (agent-owned)
             policy: High-level policy (optional)
             centralized: If True, outputs single action for all subordinates
         """
@@ -179,7 +59,7 @@ class GridAgent(Agent):
         )
 
         self.subordinates = {agent.agent_id: agent for agent in subordinates}
-        self.protocol = protocol or NoProtocol()
+        self.vertical_protocol = vertical_protocol or NoProtocol()
         self.policy = policy
         self.centralized = centralized
 
@@ -264,6 +144,35 @@ class GridAgent(Agent):
 
         return obs
 
+    def coordinate_subordinates(self, global_state: Dict) -> None:
+        """
+        Coordinate subordinate devices using vertical protocol.
+
+        This method is called by the environment during the coordination phase.
+        The GridAgent runs its vertical protocol and sends messages to subordinates.
+
+        Args:
+            global_state: Global environment state for subordinates to observe
+        """
+        if not self.subordinates:
+            return
+
+        # Collect subordinate observations
+        sub_obs = {
+            sub_id: sub_agent.observe(global_state)
+            for sub_id, sub_agent in self.subordinates.items()
+        }
+
+        # Run vertical protocol (coordinator_action could come from self.policy)
+        coordinator_action = None  # Or self.policy.forward(...) if using learned coordination
+        signals = self.vertical_protocol.coordinate(sub_obs, coordinator_action)
+
+        # Send coordination signals to subordinates
+        for sub_id, signal in signals.items():
+            if signal:  # Only send non-empty signals
+                msg = self.send_message(content=signal, recipients=[sub_id])
+                self.subordinates[sub_id].receive_message(msg)
+
     def act(self, observation: Observation) -> Any:
         """Compute coordination action and distribute to subordinates.
 
@@ -283,7 +192,7 @@ class GridAgent(Agent):
             agent_id: Observation(local=observation.local["subordinate_states"][agent_id])
             for agent_id in self.subordinates
         }
-        signals = self.protocol.coordinate(subordinate_obs, coordinator_action)
+        signals = self.vertical_protocol.coordinate(subordinate_obs, coordinator_action)
 
         # Send coordination signals as messages
         for agent_id, signal in signals.items():
@@ -334,5 +243,5 @@ class GridAgent(Agent):
 
     def __repr__(self) -> str:
         num_subs = len(self.subordinates)
-        protocol_name = self.protocol.__class__.__name__
+        protocol_name = self.vertical_protocol.__class__.__name__
         return f"GridAgent(id={self.agent_id}, subordinates={num_subs}, protocol={protocol_name})"
