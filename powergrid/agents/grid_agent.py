@@ -1,6 +1,6 @@
 """Grid-level coordinator agents for hierarchical control.
 
-GridCoordinatorAgent manages a set of device agents, implementing coordination
+GridAgent manages a set of device agents, implementing coordination
 protocols like price signals, setpoints, or consensus algorithms.
 """
 
@@ -135,7 +135,7 @@ class SetpointProtocol(Protocol):
         return signals
 
 
-class GridCoordinatorAgent(Agent):
+class GridAgent(Agent):
     """Grid-level agent that coordinates multiple device agents.
 
     GridCoordinator implements hierarchical control by:
@@ -335,4 +335,4 @@ class GridCoordinatorAgent(Agent):
     def __repr__(self) -> str:
         num_subs = len(self.subordinates)
         protocol_name = self.protocol.__class__.__name__
-        return f"GridCoordinatorAgent(id={self.agent_id}, subordinates={num_subs}, protocol={protocol_name})"
+        return f"GridAgent(id={self.agent_id}, subordinates={num_subs}, protocol={protocol_name})"

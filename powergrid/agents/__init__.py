@@ -4,7 +4,7 @@ from .base import Agent, Observation, Message, AgentID
 from .policies import Policy, RandomPolicy
 from .device_agent import DeviceAgent
 from .grid_agent import (
-    GridCoordinatorAgent,
+    GridAgent,
     Protocol,
     NoProtocol,
     PriceSignalProtocol,
@@ -28,7 +28,7 @@ __all__ = [
     "RandomPolicy",
     # Agent types
     "DeviceAgent",
-    "GridCoordinatorAgent",
+    "GridAgent",
     # Protocols
     "Protocol",
     "NoProtocol",
