@@ -40,22 +40,33 @@ class Observation:
         vec = np.array([], dtype=np.float32)
 
         # Flatten local state
-        for key in sorted(self.local.keys()):
-            val = self.local[key]
-            if isinstance(val, (int, float)):
-                vec = np.append(vec, np.float32(val))
-            elif isinstance(val, np.ndarray):
-                vec = np.concatenate([vec, val.ravel().astype(np.float32)])
+        vec = self._flatten_dict(self.local, vec)
 
         # Flatten global info
-        for key in sorted(self.global_info.keys()):
-            val = self.global_info[key]
+        vec = self._flatten_dict(self.global_info, vec)
+
+        return vec.astype(np.float32)
+
+    def _flatten_dict(self, d: Dict, vec: np.ndarray) -> np.ndarray:
+        """Recursively flatten a dictionary into a numpy array.
+
+        Args:
+            d: Dictionary to flatten
+            vec: Current vector to append to
+
+        Returns:
+            Updated vector
+        """
+        for key in sorted(d.keys()):
+            val = d[key]
             if isinstance(val, (int, float)):
                 vec = np.append(vec, np.float32(val))
             elif isinstance(val, np.ndarray):
                 vec = np.concatenate([vec, val.ravel().astype(np.float32)])
-
-        return vec.astype(np.float32)
+            elif isinstance(val, dict):
+                # Recursively flatten nested dicts
+                vec = self._flatten_dict(val, vec)
+        return vec
 
 
 @dataclass

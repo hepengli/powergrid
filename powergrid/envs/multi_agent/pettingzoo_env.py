@@ -13,6 +13,7 @@ import pandapower as pp
 import numpy as np
 from typing import Dict, Any, List, Optional
 import gymnasium as gym
+from gymnasium.spaces import Box
 
 from powergrid.agents import GridAgent, DeviceAgent
 from powergrid.agents.protocols import (
@@ -116,9 +117,18 @@ class MultiAgentPowerGridEnv(ParallelEnv):
             aid: agent.action_space
             for aid, agent in self.agents.items()
         }
+
+        # Fix observation spaces to match actual observations
+        # Get a sample observation to determine actual size
+        try:
+            pp.runpp(self.net)
+        except:
+            self.net['converged'] = False
+
+        sample_obs = self._get_observations()
         self.observation_spaces = {
-            aid: agent.observation_space
-            for aid, agent in self.agents.items()
+            aid: Box(low=-np.inf, high=np.inf, shape=obs.shape, dtype=np.float32)
+            for aid, obs in sample_obs.items()
         }
 
     def _build_network(self, config: Dict) -> pp.pandapowerNet:
@@ -218,8 +228,7 @@ class MultiAgentPowerGridEnv(ParallelEnv):
 
                 dev_agent = DeviceAgent(
                     agent_id=f"{name}_{device.name}",
-                    device=device,
-                    level=1
+                    device=device
                 )
                 device_agents.append(dev_agent)
 
@@ -273,7 +282,16 @@ class MultiAgentPowerGridEnv(ParallelEnv):
             observations: Dict mapping agent_id → observation array
             infos: Dict mapping agent_id → info dict
         """
-        super().reset(seed=seed)
+        # Don't call super().reset() - ParallelEnv base class raises NotImplementedError
+        # We provide our own complete reset implementation
+
+        # Initialize random number generator
+        if seed is not None:
+            import numpy as np
+            self.np_random = np.random.RandomState(seed)
+        elif not hasattr(self, 'np_random'):
+            import numpy as np
+            self.np_random = np.random.RandomState()
 
         self.timestep = 0
 
@@ -290,7 +308,7 @@ class MultiAgentPowerGridEnv(ParallelEnv):
                 total_steps = len(first_device.dataset['load'])
                 total_days = total_steps // self.episode_length
                 if total_days > 1:
-                    start_day = self.np_random.integers(0, total_days - 1)
+                    start_day = self.np_random.randint(0, total_days - 1)
                     self.timestep = start_day * self.episode_length
 
         # Solve initial power flow
@@ -411,7 +429,8 @@ class MultiAgentPowerGridEnv(ParallelEnv):
         for sub_agent in agent.subordinates.values():
             action_dim = sub_agent.action_space.shape[0]
             sub_action = action[idx:idx + action_dim]
-            sub_agent.device.set_action(sub_action)
+            # Set action on device through device.action.c
+            sub_agent.device.action.c = sub_action
             idx += action_dim
 
     def _update_device_states(self) -> None:
@@ -419,10 +438,11 @@ class MultiAgentPowerGridEnv(ParallelEnv):
         for agent in self.agents.values():
             for sub_agent in agent.subordinates.values():
                 device = sub_agent.device
-                # Apply dynamics
-                device.step()
+                # Apply dynamics if available
+                if hasattr(device, 'step'):
+                    device.step()
                 # Apply dataset scalers if available
-                if hasattr(device, 'dataset') and device.dataset is not None:
+                if hasattr(device, 'dataset') and device.dataset is not None and hasattr(device, 'apply_dataset'):
                     device.apply_dataset(self.timestep)
 
     def _sync_to_pandapower(self) -> None:
@@ -460,12 +480,12 @@ class MultiAgentPowerGridEnv(ParallelEnv):
 
             for sub_agent in agent.subordinates.values():
                 device = sub_agent.device
-                # Compute device cost and safety
-                device.compute_cost()
-                device.compute_safety(converged)
+                # Compute device cost and safety if methods exist
+                if hasattr(device, 'update_cost_safety'):
+                    device.update_cost_safety()
 
-                total_cost += device.cost
-                total_safety += device.safety
+                total_cost += getattr(device, 'cost', 0)
+                total_safety += getattr(device, 'safety', 0)
 
             # Aggregate to GridAgent
             agent.cost = total_cost

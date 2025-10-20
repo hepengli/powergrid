@@ -48,6 +48,9 @@ class GridAgent(Agent):
             policy: High-level policy (optional)
             centralized: If True, outputs single action for all subordinates
         """
+        # Temporarily set subordinates for space building
+        self.subordinates = {agent.agent_id: agent for agent in subordinates}
+
         action_space = self._build_action_space(subordinates, centralized)
         observation_space = self._build_observation_space(subordinates)
 
@@ -57,8 +60,6 @@ class GridAgent(Agent):
             observation_space=observation_space,
             action_space=action_space,
         )
-
-        self.subordinates = {agent.agent_id: agent for agent in subordinates}
         self.vertical_protocol = vertical_protocol or NoProtocol()
         self.policy = policy
         self.centralized = centralized
@@ -103,14 +104,18 @@ class GridAgent(Agent):
         Returns:
             Observation space
         """
-        # Aggregate observation space from subordinates
-        # For simplicity, concatenate all subordinate obs spaces
+        # Calculate total observation size
+        # Each subordinate's observation space + global_info from first subordinate
         total_dim = sum(
             agent.observation_space.shape[0]
             if isinstance(agent.observation_space, Box)
             else 10  # Default size
             for agent in subordinates
         )
+
+        # Note: GridAgent.observe() returns nested subordinate_states + global_info
+        # When flattened with as_vector(), both local and global_info are included
+        # The actual size will match what subordinates return
         return Box(low=-np.inf, high=np.inf, shape=(total_dim,), dtype=np.float32)
 
     def observe(self, global_state: Dict[str, Any]) -> Observation:

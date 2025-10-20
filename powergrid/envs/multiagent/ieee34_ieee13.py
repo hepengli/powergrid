@@ -11,17 +11,27 @@ from powergrid.networks.ieee13 import IEEE13Bus
 from powergrid.networks.ieee34 import IEEE34Bus
 
 dir = dirname(dirname(dirname(dirname(abspath(__file__)))))
-data_dir = os.path.join(dir, 'data', 'data2024.pkl')
+data_dir = os.path.join(dir, 'data', 'data2023-2024.pkl')
 with open(data_dir, 'rb') as file:
     dataset = pickle.load(file)
+# breakpoint()
+def read_data(d, load_area, renew_area, train=True):
+    """Read data from dataset with train/test split support.
 
-def read_data(d, load_area, renew_area):
+    Args:
+        d: Dataset dictionary with 'train' and 'test' keys
+        load_area: Load area identifier (e.g., 'AVA', 'BANC', 'BANCMID')
+        renew_area: Renewable energy area identifier (e.g., 'NP15')
+        train: Whether to use training data (True) or test data (False)
+    """
+    split = 'train' if train else 'test'
+    data = d[split]
+
     return {
-        'load' : d['load'][load_area],
-        'solar': d['solar'][renew_area],
-        'solar bus 23': d['solar bus 23'][renew_area],
-        'wind' : d['wind'][renew_area],
-        'price': d['price']['LMP']
+        'load' : data['load'][load_area],
+        'solar': data['solar'][renew_area],
+        'wind' : data['wind'][renew_area],
+        'price': data['price']['0096WD_7_N001']
     }
 
 class MultiAgentMicrogrids(NetworkedGridEnv):
@@ -39,9 +49,11 @@ class MultiAgentMicrogrids(NetworkedGridEnv):
 
     def _build_net(self):
         load_scale = 0.2
+        train = self.env_config.get('train', True)
+
         net = IEEE34Bus('DSO') # main grid
         dso = GridEnv(net, load_scale=load_scale, base_power=3)
-        dso.add_dataset(read_data(dataset, 'BANC', 'NP15'))
+        dso.add_dataset(read_data(dataset, 'BANC', 'NP15', train))
         self.dso = dso
 
         mg1 = GridEnv(IEEE13Bus('MG1'), load_scale=load_scale, base_power=3)
@@ -51,7 +63,7 @@ class MultiAgentMicrogrids(NetworkedGridEnv):
         mg1_wt1 = DG('WT1', bus='Bus 645', min_p_mw=0, max_p_mw=0.1, type='wind')
         mg1.add_storage(mg1_ess1)
         mg1.add_sgen([mg1_dg1, mg1_pv1, mg1_wt1])
-        mg1.add_dataset(read_data(dataset, 'AVA', 'NP15'))
+        mg1.add_dataset(read_data(dataset, 'AVA', 'NP15', train))
         net = mg1.add_to(net, 'DSO Bus 822')
 
         mg2 = GridEnv(IEEE13Bus('MG2'), load_scale=load_scale, base_power=3)
@@ -61,7 +73,7 @@ class MultiAgentMicrogrids(NetworkedGridEnv):
         mg2_wt1 = DG('WT1', bus='Bus 645', min_p_mw=0, max_p_mw=0.1, type='wind')
         mg2.add_storage(mg2_ess1)
         mg2.add_sgen([mg2_dg1, mg2_pv1, mg2_wt1])
-        mg2.add_dataset(read_data(dataset, 'BANCMID', 'NP15'))
+        mg2.add_dataset(read_data(dataset, 'BANCMID', 'NP15', train))
         net = mg2.add_to(net, 'DSO Bus 848')
 
         mg3 = GridEnv(IEEE13Bus('MG3'), load_scale=load_scale, base_power=3)
@@ -71,7 +83,7 @@ class MultiAgentMicrogrids(NetworkedGridEnv):
         mg3_wt1 = DG('WT1', 'Bus 645', min_p_mw=0, max_p_mw=0.1, type='wind')
         mg3.add_storage(mg3_ess1)
         mg3.add_sgen([mg3_dg1, mg3_pv1, mg3_wt1])
-        mg3.add_dataset(read_data(dataset, 'AZPS', 'NP15'))
+        mg3.add_dataset(read_data(dataset, 'AZPS', 'NP15', train))
         net = mg3.add_to(net, 'DSO Bus 856')
         pp.runpp(net)
 
@@ -114,6 +126,9 @@ def MultiAgentMicrogridsV2(env_config):
         MultiAgentPowerGridEnv instance
     """
     from powergrid.envs.multi_agent import MultiAgentPowerGridEnv
+    from powergrid.devices import ESS, DG
+
+    train = env_config.get('train', True)
 
     config = {
         'network': IEEE34Bus('DSO'),
@@ -124,13 +139,13 @@ def MultiAgentMicrogridsV2(env_config):
                 'devices': [
                     ESS('ESS1', bus='Bus 645', min_p_mw=-0.5, max_p_mw=0.5,
                         capacity=2.0, max_e_mwh=2, min_e_mwh=0.2, init_soc=0.5),
-                    DG('DG1', bus='Bus 675', min_p_mw=0, max_p_mw=0.66, sn_mva=1.0,
+                    DG('DG1', bus='Bus 675', min_p_mw=0, max_p_mw=0.66,
                        cost_curve_coefs=[100, 72.4, 0.5011]),
                     DG('PV1', bus='Bus 652', min_p_mw=0, max_p_mw=0.1, type='solar'),
                     DG('WT1', bus='Bus 645', min_p_mw=0, max_p_mw=0.1, type='wind'),
                 ],
                 'vertical_protocol': 'none',
-                'dataset': read_data(dataset, 'AVA', 'NP15')
+                'dataset': read_data(dataset, 'AVA', 'NP15', train)
             },
             {
                 'name': 'MG2',
@@ -144,7 +159,7 @@ def MultiAgentMicrogridsV2(env_config):
                     DG('WT1', bus='Bus 645', min_p_mw=0, max_p_mw=0.1, type='wind'),
                 ],
                 'vertical_protocol': 'none',
-                'dataset': read_data(dataset, 'BANCMID', 'NP15')
+                'dataset': read_data(dataset, 'BANCMID', 'NP15', train)
             },
             {
                 'name': 'MG3',
@@ -158,7 +173,7 @@ def MultiAgentMicrogridsV2(env_config):
                     DG('WT1', bus='Bus 645', min_p_mw=0, max_p_mw=0.1, type='wind'),
                 ],
                 'vertical_protocol': 'none',
-                'dataset': read_data(dataset, 'AZPS', 'NP15')
+                'dataset': read_data(dataset, 'AZPS', 'NP15', train)
             }
         ],
         'horizontal_protocol': 'none',
