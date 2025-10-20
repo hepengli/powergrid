@@ -1,10 +1,10 @@
-"""Unit tests for GridCoordinatorAgent."""
+"""Unit tests for GridAgent."""
 
 import pytest
 import numpy as np
 
 from powergrid.agents.grid_agent import (
-    GridCoordinatorAgent,
+    GridAgent,
     NoProtocol,
     PriceSignalProtocol,
     SetpointProtocol,
@@ -90,8 +90,8 @@ class TestProtocols:
         assert signals["agent_2"]["setpoint"] == -0.3
 
 
-class TestGridCoordinatorAgent:
-    """Tests for GridCoordinatorAgent."""
+class TestGridAgent:
+    """Tests for GridAgent."""
 
     @pytest.fixture
     def subordinates(self):
@@ -118,7 +118,7 @@ class TestGridCoordinatorAgent:
 
     def test_coordinator_initialization(self, subordinates):
         """Test coordinator initialization."""
-        coordinator = GridCoordinatorAgent(
+        coordinator = GridAgent(
             agent_id="mg_controller",
             subordinates=subordinates,
             protocol=NoProtocol(),
@@ -132,7 +132,7 @@ class TestGridCoordinatorAgent:
 
     def test_coordinator_observe(self, subordinates):
         """Test coordinator observation collection."""
-        coordinator = GridCoordinatorAgent(
+        coordinator = GridAgent(
             agent_id="mg_controller",
             subordinates=subordinates,
         )
@@ -157,7 +157,7 @@ class TestGridCoordinatorAgent:
     def test_coordinator_act_with_protocol(self, subordinates):
         """Test coordinator action with protocol."""
         protocol = PriceSignalProtocol(initial_price=50.0)
-        coordinator = GridCoordinatorAgent(
+        coordinator = GridAgent(
             agent_id="mg_controller",
             subordinates=subordinates,
             protocol=protocol,
@@ -181,7 +181,7 @@ class TestGridCoordinatorAgent:
 
     def test_coordinator_reset(self, subordinates):
         """Test coordinator reset."""
-        coordinator = GridCoordinatorAgent(
+        coordinator = GridAgent(
             agent_id="mg_controller",
             subordinates=subordinates,
         )
@@ -202,7 +202,7 @@ class TestGridCoordinatorAgent:
 
     def test_coordinator_get_subordinate_actions(self, subordinates):
         """Test getting actions from subordinates."""
-        coordinator = GridCoordinatorAgent(
+        coordinator = GridAgent(
             agent_id="mg_controller",
             subordinates=subordinates,
         )
@@ -222,7 +222,7 @@ class TestGridCoordinatorAgent:
 
     def test_coordinator_centralized_mode(self, subordinates):
         """Test centralized action space."""
-        coordinator = GridCoordinatorAgent(
+        coordinator = GridAgent(
             agent_id="mg_controller",
             subordinates=subordinates,
             centralized=True,

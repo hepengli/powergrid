@@ -2,7 +2,7 @@
 
 This example demonstrates:
 1. Creating DeviceAgents from existing devices
-2. Hierarchical coordination with GridCoordinatorAgent
+2. Hierarchical coordination with GridAgent
 3. Price-based coordination protocol
 4. Observation extraction and action computation
 """
@@ -10,7 +10,7 @@ This example demonstrates:
 import numpy as np
 from powergrid.agents import (
     DeviceAgent,
-    GridCoordinatorAgent,
+    GridAgent,
     PriceSignalProtocol,
     Observation,
 )
@@ -66,7 +66,7 @@ def main():
     print("\n[3] Creating grid coordinator with price-based protocol...")
 
     protocol = PriceSignalProtocol(initial_price=50.0)
-    coordinator = GridCoordinatorAgent(
+    coordinator = GridAgent(
         agent_id="mg_controller",
         subordinates=[ess_agent, dg_agent],
         protocol=protocol,

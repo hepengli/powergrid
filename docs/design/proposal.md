@@ -69,26 +69,53 @@ The current implementation follows a **centralized single-agent** pattern where:
 
 ### High-Level Design
 
+**Phased Implementation** (clarified through detailed design):
+
+**Phase 1 (Week 3-4)**: Two-level hierarchy
+```
+┌───────────────┐  ┌───────────────┐  ┌───────────────┐
+│ GridAgent MG1 │  │ GridAgent MG2 │  │ GridAgent MG3 │  ← Level 2 (RL-controlled)
+│  (Microgrid)  │  │  (Microgrid)  │  │  (Microgrid)  │
+└───────┬───────┘  └───────┬───────┘  └───────┬───────┘
+        │                  │                  │
+   ┌────┴───┐         ┌────┴───┐        ┌────┴───┐
+   │        │         │        │        │        │
+┌──▼──┐ ┌──▼──┐   ┌──▼──┐ ┌──▼──┐  ┌──▼──┐ ┌──▼──┐
+│ ESS │ │ DG  │   │ ESS │ │Solar│  │ ESS │ │ DG  │  ← Level 1 (DeviceAgents)
+└─────┘ └─────┘   └─────┘ └─────┘  └─────┘ └─────┘
+
+Horizontal Protocol (Environment-owned): GridAgent ↔ GridAgent
+Vertical Protocol (Agent-owned): GridAgent → DeviceAgents
+```
+
+**Phase 2 (Week 11-12)**: Three-level hierarchy
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    System Layer                         │
-│  (Multi-grid coordination, ISO-level market clearing)   │
+│                    SystemAgent (ISO)                    │  ← Level 3 (RL or rule-based)
+│              (Market clearing, LMP computation)          │
 └──────────────────┬──────────────────────────────────────┘
                    │
         ┌──────────┴──────────┐
         │                     │
 ┌───────▼─────────┐  ┌────────▼────────┐
-│   Grid Agent 1  │  │  Grid Agent 2   │  ← Grid Layer
-│  (MG Controller)│  │ (Substation)    │     (Local optimization)
+│   GridAgent MG1 │  │  GridAgent MG2  │  ← Level 2 (RL-controlled)
+│  (MG Controller)│  │  (MG Controller)│
 └───────┬─────────┘  └────────┬────────┘
         │                     │
    ┌────┴───┐            ┌────┴───┐
    │        │            │        │
 ┌──▼──┐ ┌──▼──┐      ┌──▼──┐ ┌──▼──┐
-│ DG  │ │ ESS │      │Solar│ │Load │  ← Device Layer
-│Agent│ │Agent│      │Agent│ │Agent│     (Component control)
+│ ESS │ │ DG  │      │Solar│ │ ESS │  ← Level 1 (DeviceAgents)
 └─────┘ └─────┘      └─────┘ └─────┘
 ```
+
+**Key Architectural Insights**:
+1. **GridAgents are RL-controllable agents** (microgrid controllers), matching existing `MultiAgentMicrogrids`
+2. **DeviceAgents are subordinates** managed internally by GridAgents
+3. **Protocols split by ownership**:
+   - Vertical (agent-owned): Parent → child (e.g., GridAgent → DeviceAgents)
+   - Horizontal (environment-owned): Peer ↔ peer (e.g., GridAgent ↔ GridAgent)
+4. **SystemAgent deferred** to Week 11-12 (not needed for basic multi-agent functionality)
 
 ### Key Components
 
@@ -167,44 +194,92 @@ class GridCoordinatorAgent(Agent):
 
 #### 2. Communication Protocol Layer
 
-**Location**: `powergrid/communication/`
+**Location**: `powergrid/agents/protocols.py`
+
+**Design Insight**: Protocols split into **two types** based on ownership and scope:
+
+##### **Vertical Protocols** (Agent-Owned)
+
+Parent → child coordination. Each agent owns its vertical protocol to coordinate its subordinates.
 
 ```python
-# communication/protocols.py
-class Protocol(ABC):
-    """Base class for agent coordination protocols."""
+# agents/protocols.py
+class VerticalProtocol(ABC):
+    """Parent → child coordination protocol (agent-owned)."""
 
     @abstractmethod
-    def coordinate(self, observations: Dict[AgentID, Obs]) -> Dict[AgentID, Setpoint]:
-        """Given all observations, compute coordination signals."""
+    def coordinate(
+        self,
+        subordinate_observations: Dict[AgentID, Observation],
+        parent_action: Optional[Any] = None
+    ) -> Dict[AgentID, Dict[str, Any]]:
+        """Compute coordination signals for subordinates."""
 
-# communication/market.py
-class LMPMarket(Protocol):
-    """Locational Marginal Price coordination."""
+class PriceSignalProtocol(VerticalProtocol):
+    """Parent broadcasts price to subordinates."""
 
-    def coordinate(self, observations):
-        # Solve optimal power flow
-        lmp = self._solve_opf(observations)
-        # Broadcast price signals
-        return {agent: {'price': lmp[agent.bus]} for agent in observations}
+    def coordinate(self, subordinate_observations, parent_action=None):
+        # Update price from parent action
+        price = parent_action if parent_action else self.default_price
+        # Broadcast to all subordinates
+        return {sub_id: {'price': price} for sub_id in subordinate_observations}
 
-# communication/consensus.py
-class ADMMConsensus(Protocol):
-    """Alternating Direction Method of Multipliers."""
+class SetpointProtocol(VerticalProtocol):
+    """Parent assigns power setpoints to subordinates."""
 
-    def coordinate(self, observations):
-        # Iterative consensus algorithm
-        for _ in range(self.max_iters):
-            # Local updates
-            local_sols = {a: self._local_update(a, obs)
-                         for a, obs in observations.items()}
-            # Dual updates
-            self._dual_update(local_sols)
-        return local_sols
+    def coordinate(self, subordinate_observations, parent_action=None):
+        # parent_action is dict of {subordinate_id: setpoint}
+        return {sub_id: {'setpoint': parent_action[sub_id]}
+                for sub_id in parent_action}
 ```
 
+##### **Horizontal Protocols** (Environment-Owned)
+
+Peer ↔ peer coordination. Environment owns and runs horizontal protocols as they require global view.
+
+```python
+class HorizontalProtocol(ABC):
+    """Peer ↔ peer coordination protocol (environment-owned)."""
+
+    @abstractmethod
+    def coordinate(
+        self,
+        agents: Dict[AgentID, Agent],
+        observations: Dict[AgentID, Observation],
+        topology: Optional[Dict] = None
+    ) -> Dict[AgentID, Dict[str, Any]]:
+        """Coordinate peer agents (requires global view)."""
+
+class PeerToPeerTradingProtocol(HorizontalProtocol):
+    """P2P energy trading marketplace."""
+
+    def coordinate(self, agents, observations, topology=None):
+        # Collect bids/offers from all agents
+        bids, offers = self._collect_bids_offers(observations)
+        # Clear market (environment acts as auctioneer)
+        trades = self._clear_market(bids, offers)
+        # Return trade confirmations
+        return self._generate_trade_signals(trades)
+
+class ConsensusProtocol(HorizontalProtocol):
+    """Distributed consensus via gossip algorithm."""
+
+    def coordinate(self, agents, observations, topology=None):
+        # Iterative averaging until convergence
+        values = {aid: obs.local['value'] for aid, obs in observations.items()}
+        for _ in range(self.max_iters):
+            values = self._average_with_neighbors(values, topology)
+        return {aid: {'consensus_value': v} for aid, v in values.items()}
+```
+
+**Key Architectural Insight**:
+- **Vertical protocols** are decentralized (each agent manages its own children)
+- **Horizontal protocols** are centralized (environment provides marketplace/infrastructure)
+
 **Use Cases**:
-- **Energy researchers**: Implement domain-specific protocols (droop control, volt-var)
+- **Vertical**: GridAgent → DeviceAgents (price signals, setpoints, reserve requirements)
+- **Horizontal**: GridAgent ↔ GridAgent (P2P trading, frequency regulation, consensus)
+- **Energy researchers**: Implement domain-specific protocols (droop control, volt-var, ADMM)
 - **RL researchers**: Study communication-efficient MARL (gossip learning, federated RL)
 
 ---
@@ -682,19 +757,33 @@ class HierarchicalGridEnv(MultiAgentPowerGridEnv):
 
 #### Week 3-4: Multi-Agent Environment API
 
+**Architectural Decisions** (refined through detailed design):
+- **GridAgents** are the primary RL-controllable agents (microgrid controllers)
+- **DeviceAgents** are subordinates managed internally by GridAgents
+- **Two protocol types**:
+  - **Vertical protocols** (agent-owned): Parent → child coordination (e.g., GridAgent → DeviceAgents)
+  - **Horizontal protocols** (environment-owned): Peer ↔ peer coordination (e.g., GridAgent ↔ GridAgent)
+- **SystemAgent deferred** to Week 11-12 (not needed for core multi-agent functionality)
+
 | Owner | Task | Deliverables |
 |-------|------|-------------|
-| Architect | Implement `MultiAgentPowerGridEnv` (PettingZoo) | `envs/multi_agent/base.py` |
-| Architect | Action/observation space composition | Heterogeneous agent support, action masking |
-| Domain | Create 3 example multi-agent environments | IEEE13 (3 agents), IEEE34 (5 agents), hierarchical (2 levels) |
-| DevOps | Integration tests with RLlib/SB3 | Verify compatibility, write test scripts |
+| Architect | Refactor protocol system | Split into `VerticalProtocol` and `HorizontalProtocol` base classes |
+| Architect | Implement `MultiAgentPowerGridEnv` (PettingZoo) | `envs/multi_agent/pettingzoo_env.py` with protocol coordination |
+| Architect | Update GridAgent for vertical protocols | Add `coordinate_subordinates()` method |
+| Domain | Implement horizontal protocols | P2P trading, consensus protocols |
+| Domain | Create 3 example environments | Simple 2-MG, P2P trading 3-MG, MultiAgentMicrogrids V2 |
+| DevOps | Unit tests for protocols | Test vertical and horizontal coordination separately |
+| DevOps | Integration tests with RLlib | Train MAPPO on 3-microgrid environment |
 
 **Deliverables**:
-- ✅ PettingZoo-compatible environment
+- ✅ PettingZoo-compatible environment with GridAgents
+- ✅ Vertical protocol system (PriceSignal, Setpoint, NoProtocol)
+- ✅ Horizontal protocol system (P2P Trading, Consensus)
 - ✅ 3 working example environments
-- ✅ Integration tests with MAPPO, IPPO
+- ✅ Integration tests with MAPPO training
+- ✅ Backward compatibility with existing `MultiAgentMicrogrids`
 
-**Milestone**: Train MAPPO on IEEE34 with 5 agents, achieve convergence
+**Milestone**: Train MAPPO on 3-microgrid environment with P2P trading, achieve convergence (reward > -50)
 
 ---
 
@@ -739,39 +828,46 @@ class HierarchicalGridEnv(MultiAgentPowerGridEnv):
 
 ### Month 3: Advanced Features & Polish
 
-#### Week 9-10: Communication & Coordination
+#### Week 9-10: Advanced Protocols & Network Templates
+
+**Note**: Basic vertical/horizontal protocols implemented in Week 3-4. This week adds advanced features.
 
 | Owner | Task | Deliverables |
 |-------|------|-------------|
-| Architect | Design `Protocol` interface | `communication/protocols.py` |
 | Architect | Implement async message passing | Time-delayed, lossy communication channels |
-| Domain | Build 5 coordination protocols | Price signal, ADMM, consensus, droop control, volt-var |
+| Domain | Build advanced coordination protocols | ADMM, droop control, volt-var, federated learning |
 | Domain | Network templates library | 10+ networks (IEEE 13/34/123, CIGRE MV/LV, Pecan Street) |
-| DevOps | Protocol benchmarks | Compare centralized vs. decentralized vs. hierarchical |
+| DevOps | Protocol benchmarks | Compare centralized vs. decentralized vs. peer-to-peer |
 
 **Deliverables**:
-- ✅ Communication protocol framework
-- ✅ 5+ coordination mechanisms
+- ✅ Async message passing with delays/losses
+- ✅ 5+ advanced coordination protocols
 - ✅ 10+ network templates
 - ✅ Benchmark comparison study
 
 ---
 
-#### Week 11-12: Hierarchical Control & Finalization
+#### Week 11-12: Three-Level Hierarchy & Finalization
+
+**Focus**: Add SystemAgent (Level 3) for ISO/market operator control.
 
 | Owner | Task | Deliverables |
 |-------|------|-------------|
-| Architect | Implement `HierarchicalEnv` | `envs/hierarchical.py`, multi-level coordination |
-| Architect | Async scheduler (basic) | Multi-rate synchronous execution |
-| Domain | Create hierarchical examples | 3-level: ISO → Microgrid → Devices |
+| Architect | Implement `SystemAgent` class | `agents/system_agent.py`, Level 3 agent for ISO operations |
+| Architect | Extend environment for 3-level hierarchy | Support SystemAgent → GridAgent → DeviceAgent |
+| Architect | Multi-rate scheduler | GridAgents and SystemAgent act at different frequencies |
+| Domain | Create 3-level hierarchical examples | ISO → Microgrid Controllers → Devices |
+| Domain | LMP-based market clearing protocol | SystemAgent computes LMP, GridAgents respond to prices |
 | Domain | Safety constraint wrappers | PPO-Lagrangian, CPO integration |
 | DevOps | Complete documentation | API reference, 10+ tutorials, deployment guide |
 | DevOps | Benchmark suite | 5 standard tasks (voltage, dispatch, peak shaving, etc.) |
 | DevOps | CI/CD pipeline | GitHub Actions, auto-tests, coverage >80% |
 
 **Deliverables**:
-- ✅ Hierarchical multi-agent environment
-- ✅ Basic async execution support
+- ✅ SystemAgent (Level 3) implementation
+- ✅ Three-level hierarchical control examples
+- ✅ Multi-rate execution (ISO/GridAgent/Device at different frequencies)
+- ✅ LMP-based coordination protocol
 - ✅ Complete documentation (100+ pages)
 - ✅ Benchmark suite with leaderboard
 - ✅ Production-ready v2.0 release
@@ -1049,7 +1145,48 @@ See `docs/api/` for detailed API documentation (generated from docstrings).
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2025-10-07
+## Architectural Design Summary
+
+### Refined Decisions (Post Week 3-4 Design)
+
+**1. Agent Hierarchy**
+- **Level 1 (DeviceAgent)**: Individual DERs managed by GridAgents
+- **Level 2 (GridAgent)**: RL-controllable microgrid controllers (primary agents)
+- **Level 3 (SystemAgent)**: ISO/market operator (deferred to Week 11-12)
+
+**2. Protocol System**
+- **Vertical Protocols** (agent-owned, decentralized):
+  - Each agent owns its vertical protocol to coordinate subordinates
+  - Examples: PriceSignalProtocol, SetpointProtocol
+  - Used for: GridAgent → DeviceAgents
+
+- **Horizontal Protocols** (environment-owned, centralized):
+  - Environment runs horizontal protocols as they need global view
+  - Examples: PeerToPeerTradingProtocol, ConsensusProtocol
+  - Used for: GridAgent ↔ GridAgent peer coordination
+
+**3. No "Hierarchical" Protocol Type**
+- Hierarchical control = vertical protocols applied recursively at multiple levels
+- SystemAgent uses vertical protocol → GridAgents
+- GridAgent uses vertical protocol → DeviceAgents
+- No separate protocol type needed
+
+**4. Extensibility**
+- Level-based architecture (not type-checking)
+- Any future agent types inherit from `Agent` base class
+- Protocol system works with any agent regardless of type
+- Examples of future agents: VehicleAgent, LoadAgent, FeederAgent
+
+### Implementation Philosophy
+
+- **Open-Closed Principle**: Open for extension (new agent types), closed for modification (existing protocols work)
+- **Separation of Concerns**: Vertical (agent-owned) vs. Horizontal (environment-owned)
+- **Backward Compatibility**: Existing code continues working, new features opt-in
+- **Phased Delivery**: Core functionality first (Week 3-4), advanced features later (Week 11-12)
+
+---
+
+**Document Version**: 1.1
+**Last Updated**: 2025-10-19
 **Authors**: PowerGrid Development Team
-**Status**: Proposed
+**Status**: Design Refined (Week 3-4 Ready for Implementation)
