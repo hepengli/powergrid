@@ -130,7 +130,7 @@ class Agent(ABC):
         self._timestep = 0.0
 
     @abstractmethod
-    def observe(self, global_state: Dict[str, Any], *args, **kwargs) -> Observation:
+    def observe(self, global_state: Optional[Dict[str, Any]] = None, *args, **kwargs) -> Observation:
         """Extract relevant observations from global state.
 
         Args:

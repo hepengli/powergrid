@@ -70,7 +70,11 @@ class DeviceAgent(Agent):
 
     def set_action_space(self) -> None:
         """Define action space based on underlying device action."""
-        raise NotImplementedError
+        pass
+
+    def set_device_state(self) -> None:
+        """Initialize device-specific state attributes (optional)."""
+        pass
 
 
     def _get_action_space(self) -> gym.Space:
@@ -111,18 +115,21 @@ class DeviceAgent(Agent):
             dtype=np.float32
         )
 
-    def observe(self, global_state: Dict[str, Any]) -> Observation:
-        obs = Observation(timestamp=self._timestep)
+    def observe(self, global_state: Optional[Dict[str, Any]] = None, *args, **kwargs) -> Observation:
+        obs = Observation(
+            timestamp=self._timestep,
+            messages=self.mailbox.copy()
+        )
 
         # Local device state only
-        obs.local = self.state.as_vector().astype(np.float32)
+        obs.local['state'] = self.state.as_vector().astype(np.float32)
 
-        # Messages from coordinator/other agents (e.g., price signals)
-        obs.messages = self.mailbox.copy()
+        # TODO: aggregate global info if needed
+        obs.global_info = global_state
 
         return obs
 
-    def act(self, observation: Observation, given_action: Any) -> Any:
+    def act(self, observation: Observation, given_action: Any=None) -> Any:
         """Compute action using policy.
 
         Args:
@@ -139,6 +146,8 @@ class DeviceAgent(Agent):
             action = self.policy.forward(observation)
 
         self._set_device_action(action)
+        # TODO: Add communication logic (send/receive message) if needed
+
         return action
 
     def _set_device_action(self, action: Any) -> None:
@@ -147,7 +156,7 @@ class DeviceAgent(Agent):
         Args:
             action: Action from policy
         """
-        # TODO: verify action format matches device.action
+        # TODO: verify action format matches policy forward output
         assert action.size == self.action.dim_c + self.action.dim_d
         self.action.c[:] = action[:self.action.c.size]
         if self.config.get('discrete_action'):
@@ -165,6 +174,7 @@ class DeviceAgent(Agent):
             **kwargs: Additional reset params (e.g., init_soc for ESS)
         """
         super().reset()
+        self.reset_device(**kwargs)
 
     def get_reward(self) -> float:
         """Get reward signal from device cost/safety.
@@ -176,7 +186,6 @@ class DeviceAgent(Agent):
 
     def __repr__(self) -> str:
         raise NotImplementedError
-
 
     def update_state(self, *args, **kwargs) -> None:
         raise NotImplementedError

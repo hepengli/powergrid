@@ -1,11 +1,14 @@
-from typing import List, Optional, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple, Dict, Any
 import numpy as np
+from builtins import float
 
-from .base import Device
+from ..agents.device_agent import DeviceAgent
+from ..core.protocols import NoProtocol, Protocol
+from ..core.policies import Policy
 from ..utils.cost import cost_from_curve
 from ..utils.safety import s_over_rating, pf_penalty
 
-class DG(Device):
+class DG(DeviceAgent):
     """Distributed Generator (optionally with unit commitment)."""
 
     def __init__(
@@ -27,8 +30,12 @@ class DG(Device):
         shutdown_cost: float = 0.0,
         type: str = "fossil",
         dt: float = 1.0,
+        # Base class args
+        # Base class args
+        policy: Optional[Policy] = None,
+        protocol: Protocol = NoProtocol(),
+        device_config: Dict[str, Any] = {},
     ) -> None:
-        super().__init__()
         self.type = type
         self.name = name
         self.bus = bus
@@ -41,6 +48,7 @@ class DG(Device):
         self.cost_curve_coefs = list(cost_curve_coefs)
         self.dt = float(dt)
         self.min_pf = min_pf
+        self.startup_time = None  # set later if UC enabled
 
         if not np.isnan(self.sn_mva):
             # capability curve at max P
@@ -53,14 +61,22 @@ class DG(Device):
             self.shutdown_time = int(shutdown_time or 0)
             self.startup_cost = float(startup_cost)
             self.shutdown_cost = float(shutdown_cost)
+
+        super().__init__(
+            agent_id=name,
+            policy=policy,
+            protocol=protocol,
+            device_config=device_config,
+        )
+
+    def set_device_state(self):
+        if self.startup_time is not None:
             self.state.Pmax = self.max_p_mw
             self.state.Pmin = self.min_p_mw
             self.state.Qmax = self.max_q_mvar
             self.state.Qmin = self.min_q_mvar
             self.state.shutting = 0
             self.state.starting = 0
-
-        self.set_action_space()
 
     def set_action_space(self) -> None:
         # continuous
@@ -125,7 +141,7 @@ class DG(Device):
 
         self.safety = safety * self.dt
 
-    def reset(self, rnd=None) -> None:
+    def reset_device(self, rnd=None) -> None:
         # reset P/Q
         if self.action.c.size == 2:
             self.state.P = 0.0
@@ -141,7 +157,7 @@ class DG(Device):
         self.safety = 0.0
 
 
-class RES(Device):
+class RES(DeviceAgent):
     """Renewable energy source (solar/wind)."""
 
     def __init__(
@@ -155,8 +171,12 @@ class RES(Device):
         min_q_mvar: float = np.nan,
         cost_curve_coefs = (0.0, 0.0, 0.0),
         dt: float = 1.0,
+        # Base class args
+        policy: Optional[Policy] = None,
+        protocol: Protocol = NoProtocol(),
+        device_config: Dict[str, Any] = {},
     ) -> None:
-        super().__init__()
+        
         assert source in {"solar", "wind"}
         self.type = source
         self.name = name
@@ -170,7 +190,12 @@ class RES(Device):
         self.min_q_mvar = float(min_q_mvar)
         self.cost_curve_coefs = list(cost_curve_coefs)
         self.dt = float(dt)
-        self.set_action_space()
+        super().__init__(
+            agent_id=name,
+            policy=policy,
+            protocol=protocol,
+            device_config=device_config,
+        )
 
     def set_action_space(self) -> None:
         if not np.isnan(self.max_q_mvar):
@@ -180,6 +205,9 @@ class RES(Device):
             self.action.sample()
         else:
             self.action_callback = True
+
+    def set_device_state(self) -> None:
+        pass
 
     def update_state(self, *, scaling: Optional[float] = None) -> None:
         if scaling is not None:
@@ -195,7 +223,7 @@ class RES(Device):
         else:
             self.safety = 0.0
 
-    def reset(self, rnd=None) -> None:
+    def reset_device(self, rnd=None) -> None:
         self.state.P = 0.0
         if self.action.c.size > 0:
             self.state.Q = 0.0

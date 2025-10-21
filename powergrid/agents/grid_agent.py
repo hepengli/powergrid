@@ -4,215 +4,116 @@ GridAgent manages a set of device agents, implementing coordination
 protocols like price signals, setpoints, or consensus algorithms.
 """
 
-from typing import Dict, List, Any, Optional
+
+from typing import Dict, Iterable, Iterable, List, Any, Optional
 import numpy as np
 import gymnasium as gym
-from gymnasium.spaces import Box, Dict as SpaceDict
+import numpy as np
+import pandapower as pp
+from gymnasium.spaces import Box, Dict as SpaceDict, Discrete, MultiDiscrete
 
 from .base import Agent, Observation, Message, AgentID
 from ..core.policies import Policy
 from .device_agent import DeviceAgent
+from ..devices.generator import RES
+from ..devices.storage import ESS
 from ..core.protocols import VerticalProtocol, NoProtocol, Protocol
 
 
 class GridAgent(Agent):
-    """Grid-level agent that coordinates multiple device agents.
-
-    GridCoordinator implements hierarchical control by:
-    1. Collecting observations from subordinate agents
-    2. Running coordination protocol (e.g., compute prices, setpoints)
-    3. Broadcasting coordination signals via messages
-    4. Optionally aggregating subordinate actions into single action
-
-    Attributes:
-        subordinates: List of device agents managed by this coordinator
-        protocol: Coordination protocol
-        policy: High-level policy (optional, for learned coordination)
-        centralized: If True, output single action for all subordinates
-    """
 
     def __init__(
         self,
         agent_id: AgentID,
-        subordinates: List[DeviceAgent],
+        devices: List[DeviceAgent],
         protocol: Protocol = NoProtocol(),
         policy: Optional[Policy] = None,
-        centralized: bool = False,
+        centralized: bool = True,
     ):
         """Initialize grid coordinator.
 
         Args:
             agent_id: Unique identifier
-            subordinates: List of device agents to coordinate
-            protocol: Protocol for coordinating subordinate devices (agent-owned)
+            devices: List of device agents to coordinate
+            protocol: Protocol for coordinating devices (agent-owned)
             policy: High-level policy (optional)
-            centralized: If True, outputs single action for all subordinates
+            centralized: If True, outputs single action for all devices
         """
-        # Temporarily set subordinates for space building
-        self.subordinates = {agent.agent_id: agent for agent in subordinates}
-
-        action_space = self._get_action_space(subordinates, centralized)
-        observation_space = self._get_observation_space(subordinates)
+        # Temporarily set devices for space building
+        self.devices = {agent.agent_id: agent for agent in devices}
 
         super().__init__(
             agent_id=agent_id,
             level=2,  # Grid level
-            observation_space=observation_space,
-            action_space=action_space,
         )
         self.protocol = protocol
         self.policy = policy
         self.centralized = centralized
 
-    def _get_action_space(
-        self,
-        subordinates: List[DeviceAgent],
-        centralized: bool,
-    ) -> gym.Space:
-        """Build action space for grid.
-
-        Args:
-            subordinates: List of subordinate agents
-            centralized: Whether to use centralized action space
-
-        Returns:
-            Action space
-        """
-        if centralized:
-            # Concatenate all subordinate action spaces
-            total_dim = sum(
-                agent.action_space.shape[0]
-                if isinstance(agent.action_space, Box)
-                else 1
-                for agent in subordinates
-            )
-            return Box(low=-np.inf, high=np.inf, shape=(total_dim,), dtype=np.float32)
-        else:
-            # Coordinator outputs coordination signals (e.g., price)
-            # For now, single continuous value (e.g., price or reserve requirement)
-            return Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32)
-
-    def _get_observation_space(
-        self,
-        subordinates: List[DeviceAgent],
-    ) -> gym.Space:
-        """Build observation space (aggregate of subordinate obs).
-
-        Args:
-            subordinates: List of subordinate agents
-
-        Returns:
-            Observation space
-        """
-        # Calculate total observation size
-        # Each subordinate's observation space + global_info from first subordinate
-        total_dim = sum(
-            agent.observation_space.shape[0]
-            if isinstance(agent.observation_space, Box)
-            else 10  # Default size
-            for agent in subordinates
-        )
-
-        # Note: GridAgent.observe() returns nested subordinate_states + global_info
-        # When flattened with as_vector(), both local and global_info are included
-        # The actual size will match what subordinates return
-        return Box(low=-np.inf, high=np.inf, shape=(total_dim,), dtype=np.float32)
-
-    def observe(self, global_state: Dict[str, Any]) -> Observation:
-        """Collect observations from subordinate agents.
+    def observe(self, global_state: Optional[Dict[str, Any]] = None, *args, **kwargs) -> Observation:
+        """Collect observations from device agents.
 
         Args:
             global_state: Environment state
 
         Returns:
-            Aggregated observation from all subordinates
+            Aggregated observation from all devices
         """
-        obs = Observation(timestamp=self._timestep)
+        obs = Observation(
+            timestamp=self._timestep,
+            messages=self.mailbox.copy()
+        )
 
-        # Collect subordinate observations
-        sub_obs = {}
-        for agent_id, agent in self.subordinates.items():
-            sub_obs[agent_id] = agent.observe(global_state)
+        # Collect device observations
+        device_obs = {}
+        for agent_id, agent in self.devices.items():
+            device_obs[agent_id] = agent.observe(global_state)
 
         # Aggregate local state
-        obs.local["subordinate_states"] = {
-            agent_id: sub_ob.local for agent_id, sub_ob in sub_obs.items()
-        }
+        obs.local = self.build_local_observation(device_obs, *args, **kwargs)
 
-        # Aggregate global info (take from first subordinate)
-        if sub_obs:
-            first_obs = next(iter(sub_obs.values()))
-            obs.global_info = first_obs.global_info.copy()
-
-        # Include messages
-        obs.messages = self.mailbox.copy()
+        # Aggregate global info (take from first device)            
+        # TODO: update global info aggregation if needed
+        obs.global_info = global_state
 
         return obs
+    
+    def build_local_observation(self, device_obs: Dict[AgentID, Observation]) -> Any:
+        return {"device_obs": device_obs}
 
-    def coordinate_subordinates(self, global_state: Dict) -> None:
-        """
-        Coordinate subordinate devices using vertical protocol.
-
-        This method is called by the environment during the coordination phase.
-        The GridAgent runs its vertical protocol and sends messages to subordinates.
-
-        Args:
-            global_state: Global environment state for subordinates to observe
-        """
-        if not self.subordinates:
-            return
-
-        # Collect subordinate observations
-        sub_obs = {
-            sub_id: sub_agent.observe(global_state)
-            for sub_id, sub_agent in self.subordinates.items()
-        }
-
-        # Run vertical protocol (coordinator_action could come from self.policy)
-        coordinator_action = None  # Or self.policy.forward(...) if using learned coordination
-        signals = self.protocol.coordinate(sub_obs, coordinator_action)
-
-        # Send coordination signals to subordinates
-        for sub_id, signal in signals.items():
-            if signal:  # Only send non-empty signals
-                msg = self.send_message(content=signal, recipients=[sub_id])
-                self.subordinates[sub_id].receive_message(msg)
-
-    def act(self, observation: Observation) -> Any:
-        """Compute coordination action and distribute to subordinates.
+    def act(self, observation: Observation, given_action: Any=None) -> Any:
+        """Compute coordination action and distribute to devices.
 
         Args:
             observation: Aggregated observation
+            give_action: Pre-computed action (if any)
 
         Returns:
             Coordinator action (or None if decentralized)
         """
         # Get coordinator action from policy if available
-        coordinator_action = None
-        if self.policy is not None:
-            coordinator_action = self.policy.forward(observation)
+        if given_action:
+            action = given_action
+        elif self.centralized:
+            assert self.policy is not None, "GridAgent requires a policy to compute actions."
+            # this is actual action computation
+            action = self.policy.forward(observation)
+        else:
+            # TODO: this is coordinator action computation
+            # Non-centralized GridAgent using coordination_policy to coordinate devices
+            # to compute their actions individually
+            # Afterwards, GridAgent can also send messages to devices if needed
+            raise NotImplementedError("")
+        
+        self.coordinate_device(observation, action)
+        return action
 
-        # Run coordination protocol
-        subordinate_obs = {
-            agent_id: Observation(local=observation.local["subordinate_states"][agent_id])
-            for agent_id in self.subordinates
-        }
-        signals = self.protocol.coordinate(subordinate_obs, coordinator_action)
-
-        # Send coordination signals as messages
-        for agent_id, signal in signals.items():
-            if signal:  # Only send non-empty signals
-                msg = self.send_message(
-                    content=signal,
-                    recipients=[agent_id],
-                )
-                # Deliver message directly to subordinate
-                self.subordinates[agent_id].receive_message(msg)
-
-        return coordinator_action if self.centralized else None
+    def coordinate_device(self, observation: Observation, action: Any) -> None:
+        self.protocol.coordinate_action(self.devices, observation, action)
+        self.protocol.coordinate_message(self.devices, observation, action)
 
     def reset(self, *, seed: Optional[int] = None, **kwargs) -> None:
-        """Reset coordinator and all subordinates.
+        """Reset coordinator and all devices.
 
         Args:
             seed: Random seed
@@ -220,32 +121,210 @@ class GridAgent(Agent):
         """
         super().reset(seed=seed)
 
-        # Reset subordinates
-        for agent in self.subordinates.values():
+        # Reset devices
+        for agent in self.devices.values():
             agent.reset(seed=seed, **kwargs)
 
         # Reset policy
         if self.policy is not None and hasattr(self.policy, "reset"):
             self.policy.reset()
 
-    def get_subordinate_actions(
+    def get_device_actions(
         self,
         observations: Dict[AgentID, Observation],
     ) -> Dict[AgentID, Any]:
-        """Get actions from all subordinate agents.
-
-        Args:
-            observations: Observations for each subordinate
-
-        Returns:
-            Dict mapping agent_id to action
-        """
+        # TODO: use this function to get device actions in decentralized setting
         actions = {}
         for agent_id, obs in observations.items():
-            actions[agent_id] = self.subordinates[agent_id].act(obs)
+            actions[agent_id] = self.devices[agent_id].act(obs)
         return actions
 
     def __repr__(self) -> str:
-        num_subs = len(self.subordinates)
+        num_subs = len(self.devices)
         protocol_name = self.protocol.__class__.__name__
-        return f"GridAgent(id={self.agent_id}, subordinates={num_subs}, protocol={protocol_name})"
+        return f"GridAgent(id={self.agent_id}, devices={num_subs}, protocol={protocol_name})"
+
+
+class PowerGridAgent(GridAgent):
+    def __init__(
+        self,
+        net,
+        grid_config: Dict[str, Any],
+        *,
+        # Base class args
+        devices: List[DeviceAgent],
+        protocol: Protocol = NoProtocol(),
+        policy: Optional[Policy] = None,
+        centralized: bool = False,
+    ):
+        self.net = net
+        self.name = net.name
+        self.config = grid_config
+        self.sgen: Dict[str, RES] = {}
+        self.storage: Dict[str, ESS] = {}
+        self.base_power = grid_config.get("base_power", 1)
+        self.load_scale = grid_config.get("load_scale", 1)
+        self.load_rescaling(net, self.load_scale)
+
+        super().__init__(
+            agent_id=self.name,
+            devices=devices,
+            protocol=protocol,
+            policy=policy,
+            centralized=centralized,
+        )
+
+    def add_dataset(self, dataset):
+        self.dataset = dataset
+
+    def fuse_buses(self, ext_net, bus_name):
+        self.net.ext_grid.in_service = False
+        net, index = pp.merge_nets(
+            ext_net, 
+            self.net, 
+            validate=False, 
+            return_net2_reindex_lookup=True 
+        )
+        substation = pp.get_element_index(net, 'bus', bus_name)
+        ext_grid = index['bus'][self.net.ext_grid.bus.values[0]]
+        pp.fuse_buses(net, ext_grid, substation)
+
+        return net
+
+    def add_sgen(self, sgens):
+        if not isinstance(sgens, Iterable):
+            sgens = [sgens]
+
+        for sgen in sgens:
+            bus_id = pp.get_element_index(self.net, 'bus', self.name+' '+sgen.bus)
+            pp.create_sgen(self.net, bus_id, p_mw=sgen.state.P, sn_mva=sgen.sn_mva, 
+                        index=len(self.sgen), name=self.name+' '+sgen.name, 
+                        max_p_mw=sgen.max_p_mw, min_p_mw=sgen.min_p_mw, 
+                        max_q_mvar=sgen.max_q_mvar, min_q_mvar=sgen.min_q_mvar)
+            self.sgen[sgen.name] = sgen
+            self.devices[sgen.name] = sgen
+
+    def add_storage(self, storages):
+        if not isinstance(storages, Iterable):
+            storages = [storages]
+        
+        for ess in storages:
+            bus_id = pp.get_element_index(self.net, 'bus', self.name+' '+ess.bus)
+            pp.create_storage(self.net, bus_id, ess.state.P, ess.max_e_mwh, 
+                            sn_mva=ess.sn_mva, soc_percent=ess.state.soc,
+                            min_e_mwh=ess.min_e_mwh, name=self.name+' '+ess.name, 
+                            index=len(self.storage), max_p_mw=ess.max_p_mw, 
+                            min_p_mw=ess.min_p_mw, max_q_mvar=ess.max_q_mvar, 
+                            min_q_mvar=ess.min_q_mvar)
+            self.storage[ess.name] = ess
+            self.devices[ess.name] = ess
+
+    def load_rescaling(self, net, scale):
+        local_load_ids = pp.get_element_index(net, 'load', self.name, False)
+        net.load.loc[local_load_ids, 'scaling'] *= scale
+
+
+    def build_local_observation(self, device_obs: Dict[AgentID, Observation], net) -> Any:
+        local = super().build_local_observation(device_obs)
+        local['state'] = self._get_obs(net, device_obs)
+        return local
+    
+    def _get_obs(self, net, device_obs = None):
+        if device_obs is None:
+            device_obs = {
+                agent_id: agent.observe()
+                for agent_id, agent in self.devices.items()
+            }
+        obs = np.array([])
+        for _, ob in device_obs.items():
+            # P, Q, SoC of energy storage units
+            # P, Q, UC status of generators
+            obs = np.concatenate((obs, ob.local['state']))
+        # P, Q at all buses
+        local_load_ids = pp.get_element_index(net, 'load', self.name, False)
+        load_pq = net.res_load.iloc[local_load_ids].values
+        obs = np.concatenate([obs, load_pq.ravel() / self.base_power])
+        return obs.astype(np.float32)
+    
+    def get_device_action_spaces(self) -> Dict[str, gym.Space]:
+        return {
+            device.agent_id: device.action_space
+            for device in self.devices.values()
+        }
+    
+    def get_grid_action_space(self):
+        low, high, discrete_n = [], [], []
+        for sp in self.get_device_action_spaces().values():
+            if isinstance(sp, Box):
+                low = np.append(low, sp.low)
+                high = np.append(high, sp.high)
+            elif isinstance(sp, Discrete):
+                discrete_n.append(sp.n)
+            elif isinstance(sp, MultiDiscrete):
+                discrete_n.extend(list(sp.nvec))
+
+        if len(low) and len(discrete_n):
+            raise Dict({"continuous": Box(low=low, high=high, dtype=np.float32),
+                        'discrete': MultiDiscrete(discrete_n)})
+        elif len(low): # continuous
+            return Box(low=low, high=high, dtype=np.float32)
+        elif len(discrete_n): # discrete
+            return MultiDiscrete(discrete_n)
+        else: # non actionable agents
+            return Discrete(1)
+
+    def get_grid_observation_space(self, net):
+        return Box(
+            low=-np.inf, 
+            high=np.inf, 
+            shape=self._get_obs(net).shape, 
+            dtype=np.float32
+        )
+    
+    def update_state(self, net, t):
+        load_scaling = self.dataset['load'][t]
+        solar_scaling = self.dataset['solar'][t]
+        wind_scaling = self.dataset['wind'][t]
+
+        local_ids = pp.get_element_index(net, 'load', self.name, False)
+        net.load.loc[local_ids, 'scaling'] = load_scaling
+        self.load_rescaling(net, self.load_scale)
+
+        for name, ess in self.storage.items():
+            ess.update_state()
+            local_ids = pp.get_element_index(net, 'storage', self.name+' '+name)
+            states = ['p_mw', 'q_mvar', 'soc_percent', 'in_service']
+            values = [ess.state.P, ess.state.Q, ess.state.soc, bool(ess.state.on)]
+            net.storage.loc[local_ids, states] = values
+
+        for name, dg in self.sgen.items():
+            scaling = solar_scaling if dg.type == 'solar' else wind_scaling
+            dg.update_state(scaling)
+            local_ids = pp.get_element_index(net, 'sgen', self.name+' '+name)
+            states = ['p_mw', 'q_mvar', 'in_service']
+            values = [dg.state.P, dg.state.Q, bool(dg.state.on)]
+            net.sgen.loc[local_ids, states] = values
+
+    def update_cost_safety(self, net):
+        self.cost, self.safety = 0, 0
+        for ess in self.storage.values():
+            ess.update_cost_safety()
+            self.cost += ess.cost
+            self.safety += ess.safety
+        
+        for dg in self.sgen.values():
+            dg.update_cost_safety()
+            self.cost += dg.cost
+            self.safety += dg.safety
+
+        if net["converged"]:
+            local_bus_ids = pp.get_element_index(net, 'bus', self.name, False)
+            local_vm = net.res_bus.loc[local_bus_ids].vm_pu.values
+            overvoltage = np.maximum(local_vm - 1.05, 0).sum()
+            undervoltage = np.maximum(0.95 - local_vm, 0).sum()
+
+            local_line_ids = pp.get_element_index(net, 'line', self.name, False)
+            local_line_loading = net.res_line.loc[local_line_ids].loading_percent.values
+            overloading = np.maximum(local_line_loading - 100, 0).sum() * 0.01
+            
+            self.safety += overloading + overvoltage + undervoltage

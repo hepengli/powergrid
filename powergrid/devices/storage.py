@@ -1,12 +1,15 @@
-from typing import Optional
+from typing import Any, Optional, Dict
 import numpy as np
+from builtins import float
 
-from .base import Device
+from ..agents.device_agent import DeviceAgent
+from ..core.protocols import NoProtocol, Protocol
+from ..core.policies import Policy
 from ..utils.cost import cost_from_curve
 from ..utils.safety import s_over_rating, soc_bounds_penalty
 
 
-class ESS(Device):
+class ESS(DeviceAgent):
     """Energy Storage System with SOC and optional Q support."""
 
     def __init__(
@@ -27,8 +30,11 @@ class ESS(Device):
         dsc_eff: float = 0.98,
         cost_curve_coefs = (0.0, 0.0, 0.0),
         dt: float = 1.0,
+        # Base class args
+        policy: Optional[Policy] = None,
+        protocol: Protocol = NoProtocol(),
+        device_config: Dict[str, Any] = {},
     ) -> None:
-        super().__init__()
         self.type = "ESS"
         self.name = name
         self.bus = bus
@@ -48,13 +54,20 @@ class ESS(Device):
         self.init_soc = float(init_soc)
         self.min_soc = self.min_e_mwh / self.capacity
         self.max_soc = self.max_e_mwh / self.capacity
-        self.state.soc = self.init_soc
 
         if not np.isnan(self.sn_mva):
             self.min_q_mvar = -float(np.sqrt(self.sn_mva**2 - self.max_p_mw**2))
             self.max_q_mvar = float(np.sqrt(self.sn_mva**2 - self.max_p_mw**2))
 
-        self.set_action_space()
+        super().__init__(
+            agent_id=name,
+            policy=policy,
+            protocol=protocol,
+            device_config=device_config,
+        )
+
+    def set_device_state(self):
+        self.state.soc = self.init_soc
 
     def set_action_space(self) -> None:
         if not np.isnan(self.sn_mva) or not np.isnan(self.max_q_mvar):
@@ -106,7 +119,7 @@ class ESS(Device):
             high = np.array([high, self.max_q_mvar], dtype=np.float32)
         self.action.c = np.clip(self.action.c, low, high)
 
-    def reset(self, *, rnd=None, init_soc: Optional[float] = None) -> None:
+    def reset_device(self, *, rnd=None, init_soc: Optional[float] = None) -> None:
         rnd = np.random if rnd is None else rnd
         self.state.soc = float(init_soc) if init_soc is not None else float(
             rnd.uniform(self.min_soc, self.max_soc)

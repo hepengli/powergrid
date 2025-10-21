@@ -1,12 +1,27 @@
-from .base import Device
+from builtins import float
+from typing import Any, Dict, Optional
 
+from powergrid.agents.device_agent import DeviceAgent
+from powergrid.core.protocols import NoProtocol, Protocol
+from powergrid.core.policies import Policy
 from ..utils.cost import energy_cost
 
-class Grid(Device):
+class Grid(DeviceAgent):
     """Main grid interface. Convention: P>0 buys, P<0 sells."""
 
-    def __init__(self, name: str, bus: int, sn_mva: float, *, sell_discount: float = 1.0, dt: float = 1.0):
-        super().__init__()
+    def __init__(
+        self, 
+        name: str, 
+        bus: int, 
+        sn_mva: float, 
+        *, 
+        sell_discount: float = 1.0, 
+        dt: float = 1.0,
+        # Base class args
+        policy: Optional[Policy] = None,
+        protocol: Protocol = NoProtocol(),
+        device_config: Dict[str, Any] = {},
+    ) -> None:
         self.type = "GRID"
         self.name = name
         self.bus = bus
@@ -14,12 +29,20 @@ class Grid(Device):
         self.sell_discount = float(sell_discount)
         self.dt = float(dt)
         self.action_callback = True
+        super().__init__(
+            agent_id=name,
+            policy=policy,
+            protocol=protocol,
+            device_config=device_config,
+        )
+
+    def set_action_space(self) -> None:
+        pass
+
+    def set_device_state(self) -> None:
         self.state.P = 0.0
         self.state.Q = 0.0
         self.state.price = 0.0
-
-    def set_action_space(self) -> None:
-        return None
 
     def update_state(self, *, price: float = None, P: float = None, Q: float = None) -> None:
         if P is not None:
@@ -38,7 +61,7 @@ class Grid(Device):
         self.cost = cost * self.dt
         self.safety = 0.0
 
-    def reset(self, rnd=None) -> None:
+    def reset_device(self, rnd=None) -> None:
         self.state.P = 0.0
         self.state.Q = 0.0
         self.state.price = 0.0
