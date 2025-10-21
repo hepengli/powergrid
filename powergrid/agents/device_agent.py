@@ -100,7 +100,6 @@ class DeviceAgent(Agent):
         if action.dim_c > 0:
             if action.range is None:
                 raise ValueError("Device action.range must be set for continuous actions.")
-
             low, high = action.range
             if self.config.get('discrete_action'):
                 cats = self.config.get('discrete_action_cats')

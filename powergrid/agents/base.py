@@ -6,6 +6,7 @@ observation/action interfaces.
 """
 
 from abc import ABC, abstractmethod
+from builtins import float
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
 
@@ -210,7 +211,16 @@ class Agent(ABC):
         self.mailbox.clear()
         return messages
 
-    # Utility methods
+    def reset(self, *, seed: Optional[int] = None, **kwargs) -> None:
+        """Reset agent to initial state.
+
+        Args:
+            seed: Random seed for reproducibility
+            **kwargs: Additional reset parameters
+        """
+        self.mailbox.clear()
+        self._timestep = 0.0
+
     def update_timestep(self, timestep: float) -> None:
         """Update internal timestep counter.
 

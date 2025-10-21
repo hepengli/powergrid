@@ -55,6 +55,9 @@ class ConcreteDeviceAgent(DeviceAgent):
     def __repr__(self):
         """String representation."""
         return f"ConcreteDeviceAgent(id={self.agent_id})"
+from powergrid.core.policies import RandomPolicy
+from powergrid.devices.storage import ESS
+from powergrid.devices.generator import DG
 
 
 class TestDeviceAgent:
@@ -116,6 +119,38 @@ class TestDeviceAgent:
 
             def update_state(self, **kwargs):
                 pass
+    def test_device_agent_observe(self):
+        """Test observation extraction."""
+        ess = ESS(
+            name="ess_1",
+            bus=800,
+            min_p_mw=-0.5,
+            max_p_mw=0.5,
+            capacity=1.0,
+            init_soc=0.5,
+        )
+        ess.state.P = 0.2
+        ess.state.Q = 0.1
+
+        agent = DeviceAgent(device=ess)
+
+        global_state = {
+            "bus_vm": {800: 1.05},
+            "bus_va": {800: 0.5},
+            "converged": True,
+            "dataset": {"price": 50.0, "load": 1.0},
+        }
+
+        obs = agent.observe(global_state)
+
+        # Check local state only (DeviceAgent doesn't handle global info)
+        assert obs.local["P"] == 0.2
+        assert obs.local["Q"] == 0.1
+        assert obs.local["on"] == 1
+        assert obs.local["soc"] == 0.5
+
+        # DeviceAgent should NOT have global info (parent GridAgent handles it)
+        assert len(obs.global_info) == 0
 
             def update_cost_safety(self, **kwargs):
                 pass
