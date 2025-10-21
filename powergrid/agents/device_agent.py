@@ -3,17 +3,18 @@
 DeviceAgent provides a bridge between the existing Device abstraction and the
 new Agent abstraction, enabling devices to participate in multi-agent control.
 """
-from builtins import float
-from typing import Dict, Any, Optional
-import numpy as np
-import gymnasium as gym
-from gymnasium.spaces import Discrete, MultiDiscrete, Box
 
-from .base import Agent, Observation
-from ..core.policies import Policy
-from ..core.actions import Action
-from ..core.state import DeviceState
-from ..core.protocols import VerticalProtocol, NoProtocol, Protocol
+from typing import Any, Dict, Optional
+
+import gymnasium as gym
+import numpy as np
+from gymnasium.spaces import Box, Discrete, MultiDiscrete
+
+from powergrid.agents.base import Agent, Observation
+from powergrid.core.actions import Action
+from powergrid.core.policies import Policy
+from powergrid.core.protocols import NoProtocol, Protocol
+from powergrid.core.state import DeviceState
 
 
 class DeviceAgent(Agent):
@@ -68,30 +69,45 @@ class DeviceAgent(Agent):
             observation_space=self._get_observation_space(),
         )
 
+    # Initialization methods
     def set_action_space(self) -> None:
-        """Define action space based on underlying device action."""
+        """Define action space based on underlying device action.
+
+        This method should be overridden by subclasses to define device-specific action spaces.
+        """
         pass
 
     def set_device_state(self) -> None:
-        """Initialize device-specific state attributes (optional)."""
+        """Initialize device-specific state attributes.
+
+        This method can be overridden by subclasses to initialize device-specific state.
+        """
         pass
 
-
+    # Space construction methods
     def _get_action_space(self) -> gym.Space:
+        """Construct Gymnasium action space from device action configuration.
+
+        Returns:
+            Gymnasium space for device actions
+
+        Raises:
+            ValueError: If action configuration is invalid
+        """
         action = self.action
 
         # Continuous actions
         if action.dim_c > 0:
             if action.range is None:
                 raise ValueError("Device action.range must be set for continuous actions.")
-            
+
             low, high = action.range
             if self.config.get('discrete_action'):
                 cats = self.config.get('discrete_action_cats')
                 if low.size == 1:
                     return Discrete(cats)
                 else:
-                    return MultiDiscrete([cats]*low.size)
+                    return MultiDiscrete([cats] * low.size)
             return Box(
                 low=low,
                 high=high,
@@ -101,21 +117,47 @@ class DeviceAgent(Agent):
         # Discrete actions
         if action.dim_d > 0:
             if not action.ncats:
-                raise ValueError("Device action.ncats must be set a positive integer for discrete actions.")
-            
+                raise ValueError("Device action.ncats must be set to a positive integer for discrete actions.")
+
             return Discrete(action.ncats)
-        
-        raise ValueError("Device must have either continuous or discrete actions defined.") 
+
+        raise ValueError("Device must have either continuous or discrete actions defined.")
 
     def _get_observation_space(self) -> gym.Space:
+        """Construct Gymnasium observation space from device state.
+
+        Returns:
+            Gymnasium space for device observations
+        """
         return Box(
-            low=-np.inf, 
-            high=np.inf, 
-            shape=self.state.as_vector().shape, 
+            low=-np.inf,
+            high=np.inf,
+            shape=self.state.as_vector().shape,
             dtype=np.float32
         )
 
+    # Core agent lifecycle methods
+    def reset(self, *, seed: Optional[int] = None, **kwargs) -> None:
+        """Reset agent and underlying device.
+
+        Args:
+            seed: Random seed
+            **kwargs: Additional reset params (e.g., init_soc for ESS)
+        """
+        super().reset()
+        self.reset_device(**kwargs)
+
     def observe(self, global_state: Optional[Dict[str, Any]] = None, *args, **kwargs) -> Observation:
+        """Extract device observation from global state.
+
+        Args:
+            global_state: Complete environment state (optional)
+            *args: Additional positional arguments
+            **kwargs: Additional keyword arguments
+
+        Returns:
+            Structured observation for this device
+        """
         obs = Observation(
             timestamp=self._timestep,
             messages=self.mailbox.copy()
@@ -129,7 +171,7 @@ class DeviceAgent(Agent):
 
         return obs
 
-    def act(self, observation: Observation, given_action: Any=None) -> Any:
+    def act(self, observation: Observation, given_action: Any = None) -> Any:
         """Compute action using policy.
 
         Args:
@@ -154,7 +196,7 @@ class DeviceAgent(Agent):
         """Set action on underlying device.
 
         Args:
-            action: Action from policy
+            action: Action from policy (numpy array)
         """
         # TODO: verify action format matches policy forward output
         assert action.size == self.action.dim_c + self.action.dim_d
@@ -166,37 +208,55 @@ class DeviceAgent(Agent):
             self.action.c[:] = [a[action[i]] for i, a in enumerate(acts)]
         self.action.d[:] = action[self.action.c.size:]
 
-    def reset(self, *, seed: Optional[int] = None, **kwargs) -> None:
-        """Reset agent and underlying device.
+    # Device-specific methods (to be implemented by subclasses)
+    def reset_device(self, *args, **kwargs) -> None:
+        """Reset device to initial state (to be implemented by subclasses).
 
         Args:
-            seed: Random seed
-            **kwargs: Additional reset params (e.g., init_soc for ESS)
+            *args: Positional arguments
+            **kwargs: Keyword arguments
         """
-        super().reset()
-        self.reset_device(**kwargs)
+        raise NotImplementedError
+
+    def update_state(self, *args, **kwargs) -> None:
+        """Update device state (to be implemented by subclasses).
+
+        Args:
+            *args: Positional arguments
+            **kwargs: Keyword arguments
+        """
+        raise NotImplementedError
+
+    def update_cost_safety(self, *args, **kwargs) -> None:
+        """Update device cost and safety metrics (to be implemented by subclasses).
+
+        Args:
+            *args: Positional arguments
+            **kwargs: Keyword arguments
+        """
+        raise NotImplementedError
 
     def get_reward(self) -> float:
         """Get reward signal from device cost/safety.
 
         Returns:
-            Negative cost minus safety penalty
+            Reward value (negative cost minus safety penalty)
         """
         raise NotImplementedError
 
-    def __repr__(self) -> str:
-        raise NotImplementedError
-
-    def update_state(self, *args, **kwargs) -> None:
-        raise NotImplementedError
-
-    def update_cost_safety(self, *args, **kwargs) -> None:
-        raise NotImplementedError
-
-    def reset_device(self, *args, **kwargs) -> None:
-        raise NotImplementedError
-
-    # Optional hook
     def feasible_action(self) -> None:
-        """Clamp/adjust current action so it is feasible for this step."""
+        """Clamp/adjust current action to ensure feasibility.
+
+        This is an optional hook that can be overridden by subclasses to
+        enforce device-specific constraints on actions.
+        """
         return None
+
+    # Utility methods
+    def __repr__(self) -> str:
+        """Return string representation of the agent.
+
+        Returns:
+            String representation
+        """
+        raise NotImplementedError

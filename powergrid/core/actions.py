@@ -1,17 +1,31 @@
+"""Action representations for device control.
+
+This module defines action containers for devices supporting both continuous
+and discrete control actions.
+"""
+
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from typing import Optional
+
 import numpy as np
 
 Array = np.ndarray
+
 
 @dataclass
 class Action:
     """Container for device actions.
 
-    - Continuous action `c`: float32 vector (possibly empty)
-    - Discrete action `d`: **length-1** int32 vector (or empty if unused)
-    - `dim_c`/`dim_d`: sizes of c/d components
-    - `range`: (lb, ub) arrays for continuous sampling
+    Supports both continuous and discrete actions, which can be used
+    independently or combined depending on the device type.
+
+    Attributes:
+        c: Continuous action vector (float32, possibly empty)
+        d: Discrete action vector (int32, length 1 or empty if unused)
+        dim_c: Dimension of continuous action space
+        dim_d: Dimension of discrete action space
+        ncats: Number of categories for discrete actions
+        range: Bounds for continuous actions, shape (2, dim_c) as (lower, upper)
     """
 
     c: Array = field(default_factory=lambda: np.array([], dtype=np.float32))
@@ -22,6 +36,11 @@ class Action:
     range: Optional[Array] = None  # shape (2, dim_c)
 
     def sample(self) -> None:
+        """Sample random action from the defined action space.
+
+        For continuous actions, samples uniformly from the specified range.
+        For discrete actions, samples uniformly from available categories.
+        """
         if self.dim_c > 0 and self.range is not None:
             lb, ub = self.range
             self.c = np.random.uniform(lb, ub).astype(np.float32)

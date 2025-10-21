@@ -4,23 +4,33 @@ GridAgent manages a set of device agents, implementing coordination
 protocols like price signals, setpoints, or consensus algorithms.
 """
 
+from typing import Any, Dict, Iterable, List, Optional
 
-from typing import Dict, Iterable, Iterable, List, Any, Optional
-import numpy as np
 import gymnasium as gym
 import numpy as np
 import pandapower as pp
-from gymnasium.spaces import Box, Dict as SpaceDict, Discrete, MultiDiscrete
+from gymnasium.spaces import Box, Discrete, MultiDiscrete
 
-from .base import Agent, Observation, Message, AgentID
-from ..core.policies import Policy
-from .device_agent import DeviceAgent
-from ..devices.generator import RES
-from ..devices.storage import ESS
-from ..core.protocols import VerticalProtocol, NoProtocol, Protocol
+from powergrid.agents.base import Agent, AgentID, Observation
+from powergrid.agents.device_agent import DeviceAgent
+from powergrid.core.policies import Policy
+from powergrid.core.protocols import NoProtocol, Protocol
+from powergrid.devices.generator import RES
+from powergrid.devices.storage import ESS
 
 
 class GridAgent(Agent):
+    """Grid-level coordinator for managing device agents.
+
+    GridAgent coordinates multiple device agents using specified protocols
+    and optionally a centralized policy for joint decision-making.
+
+    Attributes:
+        devices: Dictionary mapping device agent IDs to DeviceAgent instances
+        protocol: Coordination protocol for managing subordinate devices
+        policy: Optional centralized policy for joint action computation
+        centralized: If True, uses centralized policy; if False, devices act independently
+    """
 
     def __init__(
         self,
@@ -50,6 +60,24 @@ class GridAgent(Agent):
         self.policy = policy
         self.centralized = centralized
 
+    # Core agent lifecycle methods
+    def reset(self, *, seed: Optional[int] = None, **kwargs) -> None:
+        """Reset coordinator and all devices.
+
+        Args:
+            seed: Random seed
+            **kwargs: Additional reset parameters
+        """
+        super().reset(seed=seed)
+
+        # Reset devices
+        for agent in self.devices.values():
+            agent.reset(seed=seed, **kwargs)
+
+        # Reset policy
+        if self.policy is not None and hasattr(self.policy, "reset"):
+            self.policy.reset()
+
     def observe(self, global_state: Optional[Dict[str, Any]] = None, *args, **kwargs) -> Observation:
         """Collect observations from device agents.
 
@@ -72,73 +100,88 @@ class GridAgent(Agent):
         # Aggregate local state
         obs.local = self.build_local_observation(device_obs, *args, **kwargs)
 
-        # Aggregate global info (take from first device)            
+        # Aggregate global info (take from first device)
         # TODO: update global info aggregation if needed
         obs.global_info = global_state
 
         return obs
-    
-    def build_local_observation(self, device_obs: Dict[AgentID, Observation]) -> Any:
+
+    def build_local_observation(self, device_obs: Dict[AgentID, Observation], *args, **kwargs) -> Any:
+        """Build local observation from device observations.
+
+        Args:
+            device_obs: Dictionary mapping device IDs to their observations
+            *args: Additional positional arguments
+            **kwargs: Additional keyword arguments
+
+        Returns:
+            Aggregated local observation dictionary
+        """
         return {"device_obs": device_obs}
 
-    def act(self, observation: Observation, given_action: Any=None) -> Any:
+    def act(self, observation: Observation, given_action: Any = None) -> Any:
         """Compute coordination action and distribute to devices.
 
         Args:
             observation: Aggregated observation
-            give_action: Pre-computed action (if any)
+            given_action: Pre-computed action (if any)
 
         Returns:
             Coordinator action (or None if decentralized)
+
+        Raises:
+            NotImplementedError: If using decentralized mode (not yet implemented)
         """
         # Get coordinator action from policy if available
         if given_action:
             action = given_action
         elif self.centralized:
             assert self.policy is not None, "GridAgent requires a policy to compute actions."
-            # this is actual action computation
+            # This is actual action computation
             action = self.policy.forward(observation)
         else:
             # TODO: this is coordinator action computation
             # Non-centralized GridAgent using coordination_policy to coordinate devices
             # to compute their actions individually
             # Afterwards, GridAgent can also send messages to devices if needed
-            raise NotImplementedError("")
-        
+            raise NotImplementedError("Decentralized coordination not yet implemented")
+
         self.coordinate_device(observation, action)
         return action
 
+    # Coordination methods
     def coordinate_device(self, observation: Observation, action: Any) -> None:
-        self.protocol.coordinate_action(self.devices, observation, action)
-        self.protocol.coordinate_message(self.devices, observation, action)
-
-    def reset(self, *, seed: Optional[int] = None, **kwargs) -> None:
-        """Reset coordinator and all devices.
+        """Coordinate device actions using the protocol.
 
         Args:
-            seed: Random seed
-            **kwargs: Additional reset parameters
+            observation: Current observation
+            action: Computed action from coordinator
         """
-        super().reset(seed=seed)
-
-        # Reset devices
-        for agent in self.devices.values():
-            agent.reset(seed=seed, **kwargs)
-
-        # Reset policy
-        if self.policy is not None and hasattr(self.policy, "reset"):
-            self.policy.reset()
+        self.protocol.coordinate_action(self.devices, observation, action)
+        self.protocol.coordinate_message(self.devices, observation, action)
 
     def get_device_actions(
         self,
         observations: Dict[AgentID, Observation],
     ) -> Dict[AgentID, Any]:
-        # TODO: use this function to get device actions in decentralized setting
+        """Get actions from all devices in decentralized mode.
+
+        Args:
+            observations: Dictionary mapping device IDs to observations
+
+        Returns:
+            Dictionary mapping device IDs to their computed actions
+
+        Note:
+            This function is intended for decentralized coordination where
+            each device computes its own action independently.
+        """
         actions = {}
         for agent_id, obs in observations.items():
             actions[agent_id] = self.devices[agent_id].act(obs)
         return actions
 
+    # Utility methods
     def __repr__(self) -> str:
         num_subs = len(self.devices)
         protocol_name = self.protocol.__class__.__name__
@@ -146,6 +189,21 @@ class GridAgent(Agent):
 
 
 class PowerGridAgent(GridAgent):
+    """Grid agent for power system coordination with PandaPower integration.
+
+    PowerGridAgent extends GridAgent with power system-specific functionality,
+    including PandaPower network integration, device management, and state updates.
+
+    Attributes:
+        net: PandaPower network object
+        name: Grid name (from network)
+        config: Grid configuration dictionary
+        sgen: Dictionary of renewable energy sources (RES)
+        storage: Dictionary of energy storage systems (ESS)
+        base_power: Base power for normalization (MW)
+        load_scale: Scaling factor for loads
+    """
+
     def __init__(
         self,
         net,
@@ -157,6 +215,16 @@ class PowerGridAgent(GridAgent):
         policy: Optional[Policy] = None,
         centralized: bool = False,
     ):
+        """Initialize power grid agent.
+
+        Args:
+            net: PandaPower network object
+            grid_config: Grid configuration dictionary
+            devices: List of device agents to coordinate
+            protocol: Coordination protocol
+            policy: Optional centralized policy
+            centralized: If True, uses centralized control
+        """
         self.net = net
         self.name = net.name
         self.config = grid_config
@@ -174,16 +242,69 @@ class PowerGridAgent(GridAgent):
             centralized=centralized,
         )
 
+    # Network setup methods
     def add_dataset(self, dataset):
+        """Add time-series dataset for loads and renewables.
+
+        Args:
+            dataset: Dictionary containing 'load', 'solar', 'wind' time series
+        """
         self.dataset = dataset
 
+    def add_sgen(self, sgens):
+        """Add renewable generators (solar/wind) to the network.
+
+        Args:
+            sgens: Single RES instance or iterable of RES instances
+        """
+        if not isinstance(sgens, Iterable):
+            sgens = [sgens]
+
+        for sgen in sgens:
+            bus_id = pp.get_element_index(self.net, 'bus', self.name + ' ' + sgen.bus)
+            pp.create_sgen(self.net, bus_id, p_mw=sgen.state.P, sn_mva=sgen.sn_mva,
+                          index=len(self.sgen), name=self.name + ' ' + sgen.name,
+                          max_p_mw=sgen.max_p_mw, min_p_mw=sgen.min_p_mw,
+                          max_q_mvar=sgen.max_q_mvar, min_q_mvar=sgen.min_q_mvar)
+            self.sgen[sgen.name] = sgen
+            self.devices[sgen.name] = sgen
+
+    def add_storage(self, storages):
+        """Add energy storage systems to the network.
+
+        Args:
+            storages: Single ESS instance or iterable of ESS instances
+        """
+        if not isinstance(storages, Iterable):
+            storages = [storages]
+
+        for ess in storages:
+            bus_id = pp.get_element_index(self.net, 'bus', self.name + ' ' + ess.bus)
+            pp.create_storage(self.net, bus_id, ess.state.P, ess.max_e_mwh,
+                            sn_mva=ess.sn_mva, soc_percent=ess.state.soc,
+                            min_e_mwh=ess.min_e_mwh, name=self.name + ' ' + ess.name,
+                            index=len(self.storage), max_p_mw=ess.max_p_mw,
+                            min_p_mw=ess.min_p_mw, max_q_mvar=ess.max_q_mvar,
+                            min_q_mvar=ess.min_q_mvar)
+            self.storage[ess.name] = ess
+            self.devices[ess.name] = ess
+
     def fuse_buses(self, ext_net, bus_name):
+        """Merge this grid with an external network by fusing buses.
+
+        Args:
+            ext_net: External PandaPower network
+            bus_name: Name of bus to fuse with external grid
+
+        Returns:
+            Merged PandaPower network
+        """
         self.net.ext_grid.in_service = False
         net, index = pp.merge_nets(
-            ext_net, 
-            self.net, 
-            validate=False, 
-            return_net2_reindex_lookup=True 
+            ext_net,
+            self.net,
+            validate=False,
+            return_net2_reindex_lookup=True
         )
         substation = pp.get_element_index(net, 'bus', bus_name)
         ext_grid = index['bus'][self.net.ext_grid.bus.values[0]]
@@ -191,45 +312,41 @@ class PowerGridAgent(GridAgent):
 
         return net
 
-    def add_sgen(self, sgens):
-        if not isinstance(sgens, Iterable):
-            sgens = [sgens]
-
-        for sgen in sgens:
-            bus_id = pp.get_element_index(self.net, 'bus', self.name+' '+sgen.bus)
-            pp.create_sgen(self.net, bus_id, p_mw=sgen.state.P, sn_mva=sgen.sn_mva, 
-                        index=len(self.sgen), name=self.name+' '+sgen.name, 
-                        max_p_mw=sgen.max_p_mw, min_p_mw=sgen.min_p_mw, 
-                        max_q_mvar=sgen.max_q_mvar, min_q_mvar=sgen.min_q_mvar)
-            self.sgen[sgen.name] = sgen
-            self.devices[sgen.name] = sgen
-
-    def add_storage(self, storages):
-        if not isinstance(storages, Iterable):
-            storages = [storages]
-        
-        for ess in storages:
-            bus_id = pp.get_element_index(self.net, 'bus', self.name+' '+ess.bus)
-            pp.create_storage(self.net, bus_id, ess.state.P, ess.max_e_mwh, 
-                            sn_mva=ess.sn_mva, soc_percent=ess.state.soc,
-                            min_e_mwh=ess.min_e_mwh, name=self.name+' '+ess.name, 
-                            index=len(self.storage), max_p_mw=ess.max_p_mw, 
-                            min_p_mw=ess.min_p_mw, max_q_mvar=ess.max_q_mvar, 
-                            min_q_mvar=ess.min_q_mvar)
-            self.storage[ess.name] = ess
-            self.devices[ess.name] = ess
-
     def load_rescaling(self, net, scale):
+        """Apply scaling factor to local loads.
+
+        Args:
+            net: PandaPower network
+            scale: Scaling multiplier
+        """
         local_load_ids = pp.get_element_index(net, 'load', self.name, False)
         net.load.loc[local_load_ids, 'scaling'] *= scale
 
-
+    # Observation methods
     def build_local_observation(self, device_obs: Dict[AgentID, Observation], net) -> Any:
+        """Build local observation including device states and network results.
+
+        Args:
+            device_obs: Device observations dictionary
+            net: PandaPower network with power flow results
+
+        Returns:
+            Local observation dictionary with device and network state
+        """
         local = super().build_local_observation(device_obs)
         local['state'] = self._get_obs(net, device_obs)
         return local
-    
-    def _get_obs(self, net, device_obs = None):
+
+    def _get_obs(self, net, device_obs=None):
+        """Extract numerical observation vector from network state.
+
+        Args:
+            net: PandaPower network
+            device_obs: Optional device observations (computed if not provided)
+
+        Returns:
+            Flattened observation array (float32)
+        """
         if device_obs is None:
             device_obs = {
                 agent_id: agent.observe()
@@ -245,14 +362,25 @@ class PowerGridAgent(GridAgent):
         load_pq = net.res_load.iloc[local_load_ids].values
         obs = np.concatenate([obs, load_pq.ravel() / self.base_power])
         return obs.astype(np.float32)
-    
+
+    # Space construction methods
     def get_device_action_spaces(self) -> Dict[str, gym.Space]:
+        """Get action spaces for all devices.
+
+        Returns:
+            Dictionary mapping device IDs to their action spaces
+        """
         return {
             device.agent_id: device.action_space
             for device in self.devices.values()
         }
-    
+
     def get_grid_action_space(self):
+        """Construct combined action space for all devices.
+
+        Returns:
+            Gymnasium space representing joint action space of all devices
+        """
         low, high, discrete_n = [], [], []
         for sp in self.get_device_action_spaces().values():
             if isinstance(sp, Box):
@@ -264,24 +392,39 @@ class PowerGridAgent(GridAgent):
                 discrete_n.extend(list(sp.nvec))
 
         if len(low) and len(discrete_n):
-            raise Dict({"continuous": Box(low=low, high=high, dtype=np.float32),
-                        'discrete': MultiDiscrete(discrete_n)})
-        elif len(low): # continuous
+            # Mixed continuous and discrete (not yet supported, should use Dict space)
+            raise NotImplementedError("Mixed action spaces not yet supported")
+        elif len(low):  # Continuous only
             return Box(low=low, high=high, dtype=np.float32)
-        elif len(discrete_n): # discrete
+        elif len(discrete_n):  # Discrete only
             return MultiDiscrete(discrete_n)
-        else: # non actionable agents
+        else:  # No actionable agents
             return Discrete(1)
 
     def get_grid_observation_space(self, net):
+        """Get observation space for this grid.
+
+        Args:
+            net: PandaPower network
+
+        Returns:
+            Gymnasium Box space for grid observations
+        """
         return Box(
-            low=-np.inf, 
-            high=np.inf, 
-            shape=self._get_obs(net).shape, 
+            low=-np.inf,
+            high=np.inf,
+            shape=self._get_obs(net).shape,
             dtype=np.float32
         )
-    
+
+    # State update methods
     def update_state(self, net, t):
+        """Update grid state from dataset and device actions.
+
+        Args:
+            net: PandaPower network to update
+            t: Timestep index in dataset
+        """
         load_scaling = self.dataset['load'][t]
         solar_scaling = self.dataset['solar'][t]
         wind_scaling = self.dataset['wind'][t]
@@ -292,7 +435,7 @@ class PowerGridAgent(GridAgent):
 
         for name, ess in self.storage.items():
             ess.update_state()
-            local_ids = pp.get_element_index(net, 'storage', self.name+' '+name)
+            local_ids = pp.get_element_index(net, 'storage', self.name + ' ' + name)
             states = ['p_mw', 'q_mvar', 'soc_percent', 'in_service']
             values = [ess.state.P, ess.state.Q, ess.state.soc, bool(ess.state.on)]
             net.storage.loc[local_ids, states] = values
@@ -300,18 +443,23 @@ class PowerGridAgent(GridAgent):
         for name, dg in self.sgen.items():
             scaling = solar_scaling if dg.type == 'solar' else wind_scaling
             dg.update_state(scaling)
-            local_ids = pp.get_element_index(net, 'sgen', self.name+' '+name)
+            local_ids = pp.get_element_index(net, 'sgen', self.name + ' ' + name)
             states = ['p_mw', 'q_mvar', 'in_service']
             values = [dg.state.P, dg.state.Q, bool(dg.state.on)]
             net.sgen.loc[local_ids, states] = values
 
     def update_cost_safety(self, net):
+        """Update cost and safety metrics for the grid.
+
+        Args:
+            net: PandaPower network with power flow results
+        """
         self.cost, self.safety = 0, 0
         for ess in self.storage.values():
             ess.update_cost_safety()
             self.cost += ess.cost
             self.safety += ess.safety
-        
+
         for dg in self.sgen.values():
             dg.update_cost_safety()
             self.cost += dg.cost
@@ -326,5 +474,5 @@ class PowerGridAgent(GridAgent):
             local_line_ids = pp.get_element_index(net, 'line', self.name, False)
             local_line_loading = net.res_line.loc[local_line_ids].loading_percent.values
             overloading = np.maximum(local_line_loading - 100, 0).sum() * 0.01
-            
+
             self.safety += overloading + overvoltage + undervoltage

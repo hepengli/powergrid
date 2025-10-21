@@ -6,9 +6,12 @@ This module defines vertical and horizontal coordination protocols:
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List, Tuple
-from ..agents.base import Agent, Observation, AgentID
+from typing import Any, Dict, List, Optional, Tuple
+from builtins import float
+
 import numpy as np
+
+from powergrid.agents.base import Agent, AgentID, Observation
 
 
 class Protocol(ABC):
@@ -21,8 +24,7 @@ class Protocol(ABC):
 # =============================================================================
 
 class VerticalProtocol(Protocol):
-    """
-    Vertical coordination protocol for parent → subordinate communication.
+    """Vertical coordination protocol for parent → subordinate communication.
 
     Each agent owns its own vertical protocol to coordinate its subordinates.
     This is decentralized - each agent independently manages its children.
@@ -37,15 +39,14 @@ class VerticalProtocol(Protocol):
         subordinate_observations: Dict[AgentID, Observation],
         parent_action: Optional[Any] = None
     ) -> Dict[AgentID, Dict[str, Any]]:
-        """
-        Compute coordination signals for subordinates.
+        """Compute coordination signals for subordinates.
 
         Args:
             subordinate_observations: Observations from all subordinate agents
             parent_action: Optional action from parent's policy (e.g., price to broadcast)
 
         Returns:
-            Dict mapping subordinate_id → coordination signal
+            Dictionary mapping subordinate_id to coordination signal
             Example: {'ess1': {'price': 50.0}, 'dg1': {'price': 50.0}}
         """
         pass
@@ -64,10 +65,15 @@ class NoProtocol(VerticalProtocol):
 
 
 class PriceSignalProtocol(VerticalProtocol):
-    """Price-based coordination via marginal price signals."""
+    """Price-based coordination via marginal price signals.
+
+    Attributes:
+        price: Current electricity price ($/MWh)
+    """
 
     def __init__(self, initial_price: float = 50.0):
-        """
+        """Initialize price signal protocol.
+
         Args:
             initial_price: Initial electricity price ($/MWh)
         """
@@ -121,8 +127,7 @@ class SetpointProtocol(VerticalProtocol):
 # =============================================================================
 
 class HorizontalProtocol(Protocol):
-    """
-    Horizontal coordination protocol for peer-to-peer communication.
+    """Horizontal coordination protocol for peer-to-peer communication.
 
     The environment owns and runs horizontal protocols, as they require
     global view of all agents. Agents participate but don't run the protocol.
@@ -139,8 +144,7 @@ class HorizontalProtocol(Protocol):
         observations: Dict[AgentID, Observation],
         topology: Optional[Dict] = None
     ) -> Dict[AgentID, Dict[str, Any]]:
-        """
-        Coordinate peer agents (requires global view).
+        """Coordinate peer agents (requires global view).
 
         Args:
             agents: All participating agents
@@ -148,7 +152,7 @@ class HorizontalProtocol(Protocol):
             topology: Optional network topology (e.g., adjacency matrix for trades)
 
         Returns:
-            Dict mapping agent_id → coordination signal
+            Dictionary mapping agent_id to coordination signal
             Example: {'MG1': {'trades': [...]}, 'MG2': {'trades': [...]}}
         """
         pass
@@ -168,16 +172,19 @@ class NoHorizontalProtocol(HorizontalProtocol):
 
 
 class PeerToPeerTradingProtocol(HorizontalProtocol):
-    """
-    Peer-to-peer energy trading marketplace.
+    """Peer-to-peer energy trading marketplace.
 
     Agents submit bids/offers based on their net demand and marginal cost.
     The environment (acting as market auctioneer) clears the market and
     sends trade confirmations back to agents.
+
+    Attributes:
+        trading_fee: Transaction fee as fraction of trade price
     """
 
     def __init__(self, trading_fee: float = 0.01):
-        """
+        """Initialize P2P trading protocol.
+
         Args:
             trading_fee: Transaction fee as fraction of trade price
         """
@@ -239,11 +246,14 @@ class PeerToPeerTradingProtocol(HorizontalProtocol):
         bids: Dict[AgentID, Dict],
         offers: Dict[AgentID, Dict]
     ) -> List[Tuple[AgentID, AgentID, float, float]]:
-        """
-        Simple market clearing algorithm.
+        """Simple market clearing algorithm.
+
+        Args:
+            bids: Dictionary of buyer bids {agent_id: {'quantity', 'max_price'}}
+            offers: Dictionary of seller offers {agent_id: {'quantity', 'min_price'}}
 
         Returns:
-            List of (buyer_id, seller_id, quantity, price)
+            List of trades as (buyer_id, seller_id, quantity, price) tuples
         """
         trades = []
 
@@ -290,15 +300,19 @@ class PeerToPeerTradingProtocol(HorizontalProtocol):
 
 
 class ConsensusProtocol(HorizontalProtocol):
-    """
-    Distributed consensus via gossip algorithm.
+    """Distributed consensus via gossip algorithm.
 
     Agents iteratively average their values with neighbors until convergence.
     Useful for coordinated frequency regulation or voltage control.
+
+    Attributes:
+        max_iterations: Maximum gossip iterations
+        tolerance: Convergence threshold
     """
 
     def __init__(self, max_iterations: int = 10, tolerance: float = 0.01):
-        """
+        """Initialize consensus protocol.
+
         Args:
             max_iterations: Maximum gossip iterations
             tolerance: Convergence threshold

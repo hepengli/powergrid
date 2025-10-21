@@ -6,11 +6,11 @@ observation/action interfaces.
 """
 
 from abc import ABC, abstractmethod
-from builtins import float
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Union
-import numpy as np
+from typing import Any, Dict, List, Optional, Union
+
 import gymnasium as gym
+import numpy as np
 
 # Type aliases
 AgentID = str
@@ -81,10 +81,10 @@ class Message:
     """
     sender: AgentID
     content: Dict[str, Any]
-    receipient: Optional[Union[AgentID, List[AgentID]]] = None  # None = broadcast
+    recipient: Optional[Union[AgentID, List[AgentID]]] = None  # None = broadcast
     timestamp: float = 0.0
 
-    # TODO: add more attributes like recipient, expiration, priority, etc.
+    # TODO: add more attributes like expiration, priority, etc.
 
 class Agent(ABC):
     """Abstract base class for all agents in the hierarchy.
@@ -129,6 +129,17 @@ class Agent(ABC):
         self.mailbox: List[Message] = []
         self._timestep = 0.0
 
+    # Core agent methods (lifecycle)
+    def reset(self, *, seed: Optional[int] = None, **kwargs) -> None:
+        """Reset agent to initial state.
+
+        Args:
+            seed: Random seed for reproducibility
+            **kwargs: Additional reset parameters
+        """
+        self.mailbox.clear()
+        self._timestep = 0.0
+
     @abstractmethod
     def observe(self, global_state: Optional[Dict[str, Any]] = None, *args, **kwargs) -> Observation:
         """Extract relevant observations from global state.
@@ -157,16 +168,7 @@ class Agent(ABC):
         """
         pass
 
-    def receive_message(self, message: Message) -> None:
-        """Handle incoming communication from another agent.
-
-        Default behavior: append to mailbox. Override for custom handling.
-
-        Args:
-            message: Message from another agent
-        """
-        self.mailbox.append(message)
-
+    # Communication methods
     def send_message(
         self,
         content: Dict[str, Any],
@@ -184,9 +186,19 @@ class Agent(ABC):
         return Message(
             sender=self.agent_id,
             content=content,
-            receipient=recipients,
+            recipient=recipients,
             timestamp=self._timestep,
         )
+
+    def receive_message(self, message: Message) -> None:
+        """Handle incoming communication from another agent.
+
+        Default behavior: append to mailbox. Override for custom handling.
+
+        Args:
+            message: Message from another agent
+        """
+        self.mailbox.append(message)
 
     def clear_mailbox(self) -> List[Message]:
         """Clear and return all messages from mailbox.
@@ -198,16 +210,7 @@ class Agent(ABC):
         self.mailbox.clear()
         return messages
 
-    def reset(self, *, seed: Optional[int] = None, **kwargs) -> None:
-        """Reset agent to initial state.
-
-        Args:
-            seed: Random seed for reproducibility
-            **kwargs: Additional reset parameters
-        """
-        self.mailbox.clear()
-        self._timestep = 0.0
-
+    # Utility methods
     def update_timestep(self, timestep: float) -> None:
         """Update internal timestep counter.
 

@@ -1,16 +1,43 @@
-from builtins import float
+"""State representations for power system devices.
+
+This module defines state containers that support various device types
+including generators, storage systems, transformers, and shunts.
+"""
+
 from dataclasses import dataclass
 from typing import Optional
+from builtins import float
+
 import numpy as np
 
 Array = np.ndarray
 
+
 @dataclass
 class DeviceState:
-    """State of a device and helper to build a numeric state vector.
+    """State of a device with conversion to numeric vector representation.
 
-    Only attributes that exist contribute to the vector, which allows different
-    devices to expose different state elements.
+    Only attributes that are not None contribute to the vector, which allows
+    different device types to expose different state elements.
+
+    Attributes:
+        P: Active power (MW)
+        Q: Reactive power (MVAr)
+        on: On/off status (0 or 1)
+        Pmax: Maximum active power limit
+        Pmin: Minimum active power limit
+        Qmax: Maximum reactive power limit
+        Qmin: Minimum reactive power limit
+        shutting: Shutting down counter for generators
+        starting: Starting up counter for generators
+        soc: State of charge (0-100%) for storage
+        max_step: Maximum number of steps for shunt devices
+        step: One-hot encoded step position for shunt devices
+        tap_max: Maximum tap position for transformers
+        tap_min: Minimum tap position for transformers
+        tap_position: Current tap position for transformers
+        loading_percentage: Transformer loading (0-100%)
+        price: Grid electricity price
     """
 
     P: float = 0.0
@@ -44,6 +71,14 @@ class DeviceState:
     price: Optional[float] = None
 
     def as_vector(self) -> np.ndarray:
+        """Convert device state to flat numeric vector.
+
+        Only non-None attributes are included in the vector. The order is fixed
+        to ensure consistency across calls.
+
+        Returns:
+            Float32 numpy array containing the state representation
+        """
         state = np.array([], dtype=np.float32)
         if self.Pmax is not None:
             state = np.append(state, self.P)
