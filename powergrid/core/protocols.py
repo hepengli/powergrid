@@ -7,7 +7,7 @@ This module defines vertical and horizontal coordination protocols:
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List, Tuple
-from .base import Agent, Observation, AgentID
+from ..agents.base import Agent, Observation, AgentID
 import numpy as np
 
 

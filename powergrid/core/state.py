@@ -1,4 +1,5 @@
-from dataclasses import dataclass, field
+from builtins import float
+from dataclasses import dataclass
 from typing import Optional
 import numpy as np
 

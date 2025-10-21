@@ -9,7 +9,7 @@ from typing import Optional, Any
 import numpy as np
 import gymnasium as gym
 
-from .base import Observation
+from ..agents.base import Observation
 
 
 class Policy(ABC):

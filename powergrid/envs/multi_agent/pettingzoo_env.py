@@ -16,7 +16,7 @@ import gymnasium as gym
 from gymnasium.spaces import Box
 
 from powergrid.agents import GridAgent, DeviceAgent
-from powergrid.agents.protocols import (
+from powergrid.core.protocols import (
     VerticalProtocol, HorizontalProtocol,
     PriceSignalProtocol, SetpointProtocol, NoProtocol,
     PeerToPeerTradingProtocol, ConsensusProtocol, NoHorizontalProtocol
@@ -487,9 +487,56 @@ class MultiAgentPowerGridEnv(ParallelEnv):
                 total_cost += getattr(device, 'cost', 0)
                 total_safety += getattr(device, 'safety', 0)
 
+            # Add grid-level constraint violations (voltage, line loading)
+            if converged:
+                mg_name = agent.agent_id
+                total_safety += self._compute_grid_violations(mg_name)
+
             # Aggregate to GridAgent
             agent.cost = total_cost
             agent.safety = total_safety
+
+    def _compute_grid_violations(self, mg_name: str) -> float:
+        """
+        Compute grid-level safety violations for a microgrid.
+
+        Includes:
+        - Voltage violations (over/under voltage)
+        - Line loading violations (overloading)
+
+        Args:
+            mg_name: Microgrid name (e.g., 'MG1')
+
+        Returns:
+            Total safety violation penalty
+        """
+        violations = 0.0
+
+        try:
+            # Get buses belonging to this microgrid
+            local_bus_ids = pp.get_element_index(self.net, 'bus', mg_name, exact_match=False)
+            if len(local_bus_ids) > 0:
+                local_vm = self.net.res_bus.loc[local_bus_ids, 'vm_pu'].values
+
+                # Voltage violations (per-unit)
+                overvoltage = np.maximum(local_vm - 1.05, 0).sum()
+                undervoltage = np.maximum(0.95 - local_vm, 0).sum()
+                violations += overvoltage + undervoltage
+
+            # Get lines belonging to this microgrid
+            local_line_ids = pp.get_element_index(self.net, 'line', mg_name, exact_match=False)
+            if len(local_line_ids) > 0:
+                local_line_loading = self.net.res_line.loc[local_line_ids, 'loading_percent'].values
+
+                # Line loading violations (scaled by 0.01 to match voltage units)
+                overloading = np.maximum(local_line_loading - 100, 0).sum() * 0.01
+                violations += overloading
+
+        except Exception:
+            # If network results are not available, skip violations
+            pass
+
+        return violations
 
     def _compute_rewards(self, converged: bool) -> Dict[str, float]:
         """Compute rewards for each GridAgent."""

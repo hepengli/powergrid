@@ -10,9 +10,9 @@ import gymnasium as gym
 from gymnasium.spaces import Box, Dict as SpaceDict
 
 from .base import Agent, Observation, Message, AgentID
-from .policies import Policy
+from ..core.policies import Policy
 from .device_agent import DeviceAgent
-from .protocols import VerticalProtocol, NoProtocol
+from ..core.protocols import VerticalProtocol, NoProtocol, Protocol
 
 
 class GridAgent(Agent):
@@ -35,7 +35,7 @@ class GridAgent(Agent):
         self,
         agent_id: AgentID,
         subordinates: List[DeviceAgent],
-        vertical_protocol: Optional[VerticalProtocol] = None,
+        protocol: Protocol = NoProtocol(),
         policy: Optional[Policy] = None,
         centralized: bool = False,
     ):
@@ -44,15 +44,15 @@ class GridAgent(Agent):
         Args:
             agent_id: Unique identifier
             subordinates: List of device agents to coordinate
-            vertical_protocol: Protocol for coordinating subordinate devices (agent-owned)
+            protocol: Protocol for coordinating subordinate devices (agent-owned)
             policy: High-level policy (optional)
             centralized: If True, outputs single action for all subordinates
         """
         # Temporarily set subordinates for space building
         self.subordinates = {agent.agent_id: agent for agent in subordinates}
 
-        action_space = self._build_action_space(subordinates, centralized)
-        observation_space = self._build_observation_space(subordinates)
+        action_space = self._get_action_space(subordinates, centralized)
+        observation_space = self._get_observation_space(subordinates)
 
         super().__init__(
             agent_id=agent_id,
@@ -60,16 +60,16 @@ class GridAgent(Agent):
             observation_space=observation_space,
             action_space=action_space,
         )
-        self.vertical_protocol = vertical_protocol or NoProtocol()
+        self.protocol = protocol
         self.policy = policy
         self.centralized = centralized
 
-    def _build_action_space(
+    def _get_action_space(
         self,
         subordinates: List[DeviceAgent],
         centralized: bool,
     ) -> gym.Space:
-        """Build action space for coordinator.
+        """Build action space for grid.
 
         Args:
             subordinates: List of subordinate agents
@@ -92,7 +92,7 @@ class GridAgent(Agent):
             # For now, single continuous value (e.g., price or reserve requirement)
             return Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32)
 
-    def _build_observation_space(
+    def _get_observation_space(
         self,
         subordinates: List[DeviceAgent],
     ) -> gym.Space:
@@ -170,7 +170,7 @@ class GridAgent(Agent):
 
         # Run vertical protocol (coordinator_action could come from self.policy)
         coordinator_action = None  # Or self.policy.forward(...) if using learned coordination
-        signals = self.vertical_protocol.coordinate(sub_obs, coordinator_action)
+        signals = self.protocol.coordinate(sub_obs, coordinator_action)
 
         # Send coordination signals to subordinates
         for sub_id, signal in signals.items():
@@ -197,7 +197,7 @@ class GridAgent(Agent):
             agent_id: Observation(local=observation.local["subordinate_states"][agent_id])
             for agent_id in self.subordinates
         }
-        signals = self.vertical_protocol.coordinate(subordinate_obs, coordinator_action)
+        signals = self.protocol.coordinate(subordinate_obs, coordinator_action)
 
         # Send coordination signals as messages
         for agent_id, signal in signals.items():
@@ -205,7 +205,6 @@ class GridAgent(Agent):
                 msg = self.send_message(
                     content=signal,
                     recipients=[agent_id],
-                    priority=1,
                 )
                 # Deliver message directly to subordinate
                 self.subordinates[agent_id].receive_message(msg)
@@ -248,5 +247,5 @@ class GridAgent(Agent):
 
     def __repr__(self) -> str:
         num_subs = len(self.subordinates)
-        protocol_name = self.vertical_protocol.__class__.__name__
+        protocol_name = self.protocol.__class__.__name__
         return f"GridAgent(id={self.agent_id}, subordinates={num_subs}, protocol={protocol_name})"

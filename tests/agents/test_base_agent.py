@@ -10,7 +10,7 @@ from powergrid.agents.base import (
     Observation,
     Message,
 )
-from powergrid.agents.policies import Policy, RandomPolicy
+from powergrid.core.policies import Policy, RandomPolicy
 
 
 class DummyAgent(Agent):

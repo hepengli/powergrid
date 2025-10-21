@@ -1,10 +1,10 @@
 """Agent abstraction layer for multi-agent power grid control."""
 
 from .base import Agent, Observation, Message, AgentID
-from .policies import Policy, RandomPolicy
+from ..core.policies import Policy, RandomPolicy
 from .device_agent import DeviceAgent
 from .grid_agent import GridAgent
-from .protocols import (
+from ..core.protocols import (
     Protocol,
     VerticalProtocol,
     HorizontalProtocol,

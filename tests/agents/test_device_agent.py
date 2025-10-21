@@ -6,7 +6,7 @@ from gymnasium.spaces import Box
 
 from powergrid.agents.device_agent import DeviceAgent
 from powergrid.agents.base import Observation
-from powergrid.agents.policies import RandomPolicy
+from powergrid.core.policies import RandomPolicy
 from powergrid.devices.storage import ESS
 from powergrid.devices.generator import DG
 
@@ -75,42 +75,13 @@ class TestDeviceAgent:
 
         obs = agent.observe(global_state)
 
-        # Check local state
+        # Check local state only (DeviceAgent doesn't handle global info)
         assert obs.local["P"] == 0.2
         assert obs.local["Q"] == 0.1
         assert obs.local["on"] == 1
         assert obs.local["soc"] == 0.5
 
-        # Check global info (not partial obs)
-        assert obs.global_info["bus_voltage"] == 1.05
-        assert obs.global_info["bus_angle"] == 0.5
-        assert obs.global_info["price"] == 50.0
-        assert obs.global_info["converged"] is True
-
-    def test_device_agent_partial_obs(self):
-        """Test partial observability."""
-        ess = ESS(
-            name="ess_1",
-            bus=800,
-            min_p_mw=-0.5,
-            max_p_mw=0.5,
-            capacity=1.0,
-        )
-
-        agent = DeviceAgent(device=ess, partial_obs=True)
-
-        global_state = {
-            "bus_vm": {800: 1.05},
-            "dataset": {"price": 50.0},
-        }
-
-        obs = agent.observe(global_state)
-
-        # Local state should be present
-        assert "P" in obs.local
-        assert "soc" in obs.local
-
-        # Global info should be empty (partial obs)
+        # DeviceAgent should NOT have global info (parent GridAgent handles it)
         assert len(obs.global_info) == 0
 
     def test_device_agent_act(self):

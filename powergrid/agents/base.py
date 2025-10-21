@@ -6,6 +6,7 @@ observation/action interfaces.
 """
 
 from abc import ABC, abstractmethod
+from builtins import float
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Union
 import numpy as np
@@ -77,13 +78,13 @@ class Message:
         sender: ID of sending agent
         content: Message payload (e.g., price signals, setpoints, constraints)
         timestamp: Time when message was sent
-        priority: Message priority for scheduling (higher = more urgent)
     """
     sender: AgentID
     content: Dict[str, Any]
+    receipient: Optional[Union[AgentID, List[AgentID]]] = None  # None = broadcast
     timestamp: float = 0.0
-    priority: int = 0
 
+    # TODO: add more attributes like recipient, expiration, priority, etc.
 
 class Agent(ABC):
     """Abstract base class for all agents in the hierarchy.
@@ -129,7 +130,7 @@ class Agent(ABC):
         self._timestep = 0.0
 
     @abstractmethod
-    def observe(self, global_state: Dict[str, Any]) -> Observation:
+    def observe(self, global_state: Dict[str, Any], *args, **kwargs) -> Observation:
         """Extract relevant observations from global state.
 
         Args:
@@ -145,7 +146,7 @@ class Agent(ABC):
         pass
 
     @abstractmethod
-    def act(self, observation: Observation) -> Any:
+    def act(self, observation: Observation, *args, **kwargs) -> Any:
         """Compute action from observation.
 
         Args:
@@ -169,15 +170,13 @@ class Agent(ABC):
     def send_message(
         self,
         content: Dict[str, Any],
-        recipients: Optional[List[AgentID]] = None,
-        priority: int = 0,
+        recipients: Optional[Union[AgentID, List[AgentID]]] = None,
     ) -> Message:
         """Create a message to send to other agents.
 
         Args:
             content: Message payload
             recipients: List of recipient agent IDs (None = broadcast)
-            priority: Message priority (higher = more urgent)
 
         Returns:
             Message object (to be delivered by environment)
@@ -185,8 +184,8 @@ class Agent(ABC):
         return Message(
             sender=self.agent_id,
             content=content,
+            receipient=recipients,
             timestamp=self._timestep,
-            priority=priority,
         )
 
     def clear_mailbox(self) -> List[Message]:
@@ -199,7 +198,6 @@ class Agent(ABC):
         self.mailbox.clear()
         return messages
 
-    @abstractmethod
     def reset(self, *, seed: Optional[int] = None, **kwargs) -> None:
         """Reset agent to initial state.
 

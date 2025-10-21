@@ -1,10 +1,16 @@
 """Demo script showcasing the agent abstraction layer.
 
 This example demonstrates:
-1. Creating DeviceAgents from existing devices
+1. Creating DeviceAgents from existing devices (ESS, DG)
 2. Hierarchical coordination with GridAgent
 3. Price-based coordination protocol
 4. Observation extraction and action computation
+5. Message passing between coordinator and subordinates
+6. Multi-timestep simulation with varying electricity prices
+
+The demo shows how agents respond to price signals:
+- High prices (>$50/MWh): ESS discharges (negative action), DG increases output
+- Low prices (<$50/MWh): ESS charges (positive action), DG reduces output
 """
 
 import numpy as np
@@ -52,8 +58,8 @@ def main():
     # ========================================
     print("\n[2] Wrapping devices as agents...")
 
-    ess_agent = DeviceAgent(device=ess, partial_obs=False)
-    dg_agent = DeviceAgent(device=dg, partial_obs=False)
+    ess_agent = DeviceAgent(device=ess)
+    dg_agent = DeviceAgent(device=dg)
 
     print(f"  - {ess_agent}")
     print(f"    Action space: {ess_agent.action_space}")
@@ -69,7 +75,8 @@ def main():
     coordinator = GridAgent(
         agent_id="mg_controller",
         subordinates=[ess_agent, dg_agent],
-        protocol=protocol,
+        vertical_protocol=protocol,
+        centralized=True,
     )
 
     print(f"  - {coordinator}")
@@ -147,6 +154,9 @@ def main():
     # Step 8: Multiple Timesteps
     # ========================================
     print("\n[8] Running 5 timesteps with varying prices...")
+    print(
+        "  (Note: Negative ESS action = discharge, Positive ESS action = charge)\n"
+    )
 
     prices = [40.0, 50.0, 70.0, 60.0, 45.0]
 
@@ -172,11 +182,23 @@ def main():
         dg_obs = dg_agent.observe(global_state)
         dg_action = dg_agent.act(dg_obs)
 
-        print(f"  t={t}: price=${price:.1f}/MWh, ESS action={ess_action[0]:.3f} MW")
+        action_type = "discharge" if ess_action[0] < 0 else "charge"
+        print(
+            f"  t={t}: price=${price:5.1f}/MWh → ESS: {ess_action[0]:6.3f} MW ({action_type:9s}), "
+            f"DG: {dg_action[0]:.3f} MW"
+        )
 
     print("\n" + "=" * 60)
     print("Demo completed successfully!")
     print("=" * 60)
+    print(
+        "\nKey Observations:"
+        "\n  • ESS responds to price signals by charging at low prices"
+        "\n    and discharging at high prices"
+        "\n  • DG adjusts output based on coordination protocol"
+        "\n  • Message passing enables hierarchical coordination"
+        "\n  • Observations include both local state and global information"
+    )
 
 
 if __name__ == "__main__":

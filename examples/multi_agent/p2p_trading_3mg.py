@@ -21,19 +21,20 @@ from os.path import dirname, abspath
 
 # Load dataset
 dir_path = dirname(dirname(dirname(abspath(__file__))))
-data_dir = os.path.join(dir_path, 'data', 'data2024.pkl')
+data_dir = os.path.join(dir_path, 'data', 'data2023-2024.pkl')
 with open(data_dir, 'rb') as file:
     dataset = pickle.load(file)
 
 
-def read_data(d, load_area, renew_area):
-    """Extract dataset for specific region."""
+def read_data(d, load_area, renew_area, train=True):
+    """Extract dataset for specific region with train/test split."""
+    split = 'train' if train else 'test'
+    data = d[split]
     return {
-        'load': d['load'][load_area],
-        'solar': d['solar'][renew_area],
-        'solar bus 23': d['solar bus 23'][renew_area],
-        'wind': d['wind'][renew_area],
-        'price': d['price']['LMP']
+        'load': data['load'][load_area],
+        'solar': data['solar'][renew_area],
+        'wind': data['wind'][renew_area],
+        'price': data['price']['0096WD_7_N001']
     }
 
 
