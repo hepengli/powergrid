@@ -1,11 +1,7 @@
 """Comprehensive tests for envs.multi_agent.multi_agent_microgrids module.
 
-NOTE: These tests currently fail due to a known PandaPower/pandas compatibility issue
-when merging IEEE bus networks. The error occurs in pandapower.merge_nets() with:
-    TypeError: int() argument must be a string, a bytes-like object or a real number, not 'NAType'
-
-This is a PandaPower 3.1.2 library issue, not a bug in the powergrid codebase.
-The tests are kept here for future use when the PandaPower library is updated.
+NOTE: These tests work with pandas >= 2.3.1 which fixes the PandaPower NAType issue.
+However, the environment requires implementing mixed action space support (continuous + discrete).
 """
 
 import pytest
@@ -16,8 +12,8 @@ from powergrid.envs.multi_agent.networked_grid_env import NetworkedGridEnv
 from powergrid.envs.configs.config_loader import load_config
 
 
-# Skip all tests in this module due to PandaPower compatibility issue
-pytestmark = pytest.mark.skip(reason="PandaPower 3.1.2 NAType compatibility issue with pandas when merging networks")
+# Skip tests due to unimplemented mixed action space feature
+pytestmark = pytest.mark.skip(reason="Mixed action spaces (continuous + discrete) not yet implemented in grid_agent.py")
 
 
 class TestMultiAgentMicrogrids:
