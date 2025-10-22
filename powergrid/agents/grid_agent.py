@@ -35,7 +35,7 @@ class GridAgent(Agent):
     def __init__(
         self,
         agent_id: AgentID,
-        devices: List[DeviceAgent],
+        devices: List[DeviceAgent] = [],
         protocol: Protocol = NoProtocol(),
         policy: Optional[Policy] = None,
         centralized: bool = True,
@@ -210,7 +210,7 @@ class PowerGridAgent(GridAgent):
         grid_config: Dict[str, Any],
         *,
         # Base class args
-        devices: List[DeviceAgent],
+        devices: List[DeviceAgent] = [],
         protocol: Protocol = NoProtocol(),
         policy: Optional[Policy] = None,
         centralized: bool = False,

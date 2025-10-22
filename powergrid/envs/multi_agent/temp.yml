@@ -1,0 +1,138 @@
+# Complete configuration for MultiAgentMicrogrids environment
+# 3 microgrids (MG1, MG2, MG3) connected to a DSO grid
+
+# General environment settings
+train: true
+penalty: 10  # Safety penalty multiplier
+share_reward: true
+convergence_failure_reward: -200.0
+convergence_failure_safety: 20.0
+dataset_path: "data2023-2024.pkl"
+
+# DSO (Distribution System Operator) main grid configuration
+dso_config:
+  load_scale: 0.2
+  base_power: 3  # Base power in MVA
+  load_area: "BANC"
+  renew_area: "NP15"
+  network: "IEEE34Bus"
+  name: "DSO"
+
+# MG1 (Microgrid 1) configuration
+mg1_config:
+  load_scale: 0.2
+  base_power: 3
+  load_area: "AVA"
+  renew_area: "NP15"
+  network: "IEEE13Bus"
+  name: "MG1"
+  connection_bus: "DSO Bus 822"
+  centralized: true
+  devices:
+    - type: "ESS"
+      name: "ESS1"
+      bus: "Bus 645"
+      min_p_mw: -0.5
+      max_p_mw: 0.5
+      capacity: 2.0
+      max_e_mwh: 2.0
+      min_e_mwh: 0.2
+      init_soc: 0.5
+    - type: "DG"
+      name: "DG1"
+      bus: "Bus 675"
+      min_p_mw: 0.0
+      max_p_mw: 0.66
+      sn_mva: 1.0
+      cost_curve_coefs: [100, 72.4, 0.5011]
+    - type: "RES"
+      name: "PV1"
+      bus: "Bus 652"
+      sn_mva: 0.1
+      source: "solar"
+    - type: "RES"
+      name: "WT1"
+      bus: "Bus 645"
+      sn_mva: 0.1
+      source: "wind"
+
+# MG2 (Microgrid 2) configuration
+mg2_config:
+  load_scale: 0.2
+  base_power: 3
+  load_area: "BANCMID"
+  renew_area: "NP15"
+  network: "IEEE13Bus"
+  name: "MG2"
+  connection_bus: "DSO Bus 848"
+  centralized: true
+  devices:
+    - type: "ESS"
+      name: "ESS1"
+      bus: "Bus 645"
+      min_p_mw: -0.5
+      max_p_mw: 0.5
+      capacity: 2.0
+      max_e_mwh: 2.0
+      min_e_mwh: 0.2
+      init_soc: 0.5
+    - type: "DG"
+      name: "DG1"
+      bus: "Bus 675"
+      min_p_mw: 0.0
+      max_p_mw: 0.60
+      sn_mva: 1.0
+      cost_curve_coefs: [100, 51.6, 0.4615]
+    - type: "RES"
+      name: "PV1"
+      bus: "Bus 652"
+      sn_mva: 0.1
+      source: "solar"
+    - type: "RES"
+      name: "WT1"
+      bus: "Bus 645"
+      sn_mva: 0.1
+      source: "wind"
+
+# MG3 (Microgrid 3) configuration
+mg3_config:
+  load_scale: 0.2
+  base_power: 3
+  load_area: "AZPS"
+  renew_area: "NP15"
+  network: "IEEE13Bus"
+  name: "MG3"
+  connection_bus: "DSO Bus 856"
+  centralized: true
+  devices:
+    - type: "ESS"
+      name: "ESS1"
+      bus: "Bus 645"
+      min_p_mw: -0.5
+      max_p_mw: 0.5
+      capacity: 2.0
+      max_e_mwh: 2.0
+      min_e_mwh: 0.2
+      init_soc: 0.5
+    - type: "DG"
+      name: "DG1"
+      bus: "Bus 675"
+      min_p_mw: 0.0
+      max_p_mw: 0.50
+      sn_mva: 1.0
+      cost_curve_coefs: [100, 51.6, 0.4615]
+    - type: "RES"
+      name: "PV1"
+      bus: "Bus 652"
+      sn_mva: 0.1
+      source: "solar"
+    - type: "RES"
+      name: "WT1"
+      bus: "Bus 645"
+      sn_mva: 0.1
+      source: "wind"
+
+# Data configuration
+data:
+  dataset_path: "data/data2023-2024.pkl"
+  price_area: "0096WD_7_N001"
