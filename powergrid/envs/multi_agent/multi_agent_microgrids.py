@@ -95,13 +95,16 @@ class MultiAgentMicrogrids(NetworkedGridEnv):
         storage = []
         sgen = []
         for device_args in mg_config['devices']:
-            device_type = device_args.pop('type', None)
+            # Use .get() instead of .pop() to avoid modifying the config
+            device_type = device_args.get('type', None)
+            # Create a copy without 'type' for device initialization
+            device_kwargs = {k: v for k, v in device_args.items() if k != 'type'}
             if device_type == 'ESS':
-                storage.append(ESS(**device_args))
+                storage.append(ESS(**device_kwargs))
             elif device_type == 'DG':
-                sgen.append(DG(**device_args))
+                sgen.append(DG(**device_kwargs))
             elif device_type == 'RES':
-                sgen.append(RES(**device_args))
+                sgen.append(RES(**device_kwargs))
             else:
                 raise ValueError(f"Unknown device type: {device_type}")
         mg_agent = PowerGridAgent(

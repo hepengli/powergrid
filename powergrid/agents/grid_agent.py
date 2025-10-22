@@ -4,12 +4,12 @@ GridAgent manages a set of device agents, implementing coordination
 protocols like price signals, setpoints, or consensus algorithms.
 """
 
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict as DictType, Iterable, List, Optional
 
 import gymnasium as gym
 import numpy as np
 import pandapower as pp
-from gymnasium.spaces import Box, Discrete, MultiDiscrete
+from gymnasium.spaces import Box, Dict, Discrete, MultiDiscrete
 
 from powergrid.agents.base import Agent, AgentID, Observation
 from powergrid.agents.device_agent import DeviceAgent
@@ -78,7 +78,7 @@ class GridAgent(Agent):
         if self.policy is not None and hasattr(self.policy, "reset"):
             self.policy.reset()
 
-    def observe(self, global_state: Optional[Dict[str, Any]] = None, *args, **kwargs) -> Observation:
+    def observe(self, global_state: Optional[DictType[str, Any]] = None, *args, **kwargs) -> Observation:
         """Collect observations from device agents.
 
         Args:
@@ -106,7 +106,7 @@ class GridAgent(Agent):
 
         return obs
 
-    def build_local_observation(self, device_obs: Dict[AgentID, Observation], *args, **kwargs) -> Any:
+    def build_local_observation(self, device_obs: DictType[AgentID, Observation], *args, **kwargs) -> Any:
         """Build local observation from device observations.
 
         Args:
@@ -162,8 +162,8 @@ class GridAgent(Agent):
 
     def get_device_actions(
         self,
-        observations: Dict[AgentID, Observation],
-    ) -> Dict[AgentID, Any]:
+        observations: DictType[AgentID, Observation],
+    ) -> DictType[AgentID, Any]:
         """Get actions from all devices in decentralized mode.
 
         Args:
@@ -207,7 +207,7 @@ class PowerGridAgent(GridAgent):
     def __init__(
         self,
         net,
-        grid_config: Dict[str, Any],
+        grid_config: DictType[str, Any],
         *,
         # Base class args
         devices: List[DeviceAgent] = [],
@@ -228,8 +228,8 @@ class PowerGridAgent(GridAgent):
         self.net = net
         self.name = net.name
         self.config = grid_config
-        self.sgen: Dict[str, RES] = {}
-        self.storage: Dict[str, ESS] = {}
+        self.sgen: DictType[str, RES] = {}
+        self.storage: DictType[str, ESS] = {}
         self.base_power = grid_config.get("base_power", 1)
         self.load_scale = grid_config.get("load_scale", 1)
         self.load_rescaling(net, self.load_scale)
@@ -323,7 +323,7 @@ class PowerGridAgent(GridAgent):
         net.load.loc[local_load_ids, 'scaling'] *= scale
 
     # Observation methods
-    def build_local_observation(self, device_obs: Dict[AgentID, Observation], net) -> Any:
+    def build_local_observation(self, device_obs: DictType[AgentID, Observation], net) -> Any:
         """Build local observation including device states and network results.
 
         Args:
@@ -364,7 +364,7 @@ class PowerGridAgent(GridAgent):
         return obs.astype(np.float32)
 
     # Space construction methods
-    def get_device_action_spaces(self) -> Dict[str, gym.Space]:
+    def get_device_action_spaces(self) -> DictType[str, gym.Space]:
         """Get action spaces for all devices.
 
         Returns:
@@ -392,8 +392,8 @@ class PowerGridAgent(GridAgent):
                 discrete_n.extend(list(sp.nvec))
 
         if len(low) and len(discrete_n):
-            # Mixed continuous and discrete (not yet supported, should use Dict space)
-            raise NotImplementedError("Mixed action spaces not yet supported")
+            return Dict({"continuous": Box(low=low, high=high, dtype=np.float32),
+                        'discrete': MultiDiscrete(discrete_n)})
         elif len(low):  # Continuous only
             return Box(low=low, high=high, dtype=np.float32)
         elif len(discrete_n):  # Discrete only
@@ -441,8 +441,12 @@ class PowerGridAgent(GridAgent):
             net.storage.loc[local_ids, states] = values
 
         for name, dg in self.sgen.items():
-            scaling = solar_scaling if dg.type == 'solar' else wind_scaling
-            dg.update_state(scaling)
+            # RES devices (solar/wind) use scaling, DG devices don't
+            if isinstance(dg, RES):
+                scaling = solar_scaling if dg.type == 'solar' else wind_scaling
+                dg.update_state(scaling=scaling)
+            else:
+                dg.update_state()
             local_ids = pp.get_element_index(net, 'sgen', self.name + ' ' + name)
             states = ['p_mw', 'q_mvar', 'in_service']
             values = [dg.state.P, dg.state.Q, bool(dg.state.on)]

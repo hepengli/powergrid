@@ -11,7 +11,7 @@ from builtins import float
 
 import numpy as np
 
-from powergrid.agents.base import Agent, AgentID, Observation
+from powergrid.agents.base import Agent, AgentID, Observation, Message
 
 
 class Protocol(ABC):
@@ -149,10 +149,10 @@ class PriceSignalProtocol(VerticalProtocol):
         observation: Observation,
         action: Optional[Any] = None
     ) -> None:
-        """Send price signal as message to all devices.
+        """Send price signal as message to all devices via mailbox.
 
-        Updates the price and stores it in device observations for their next action.
-        Devices can use the price signal in their local optimization.
+        Broadcasts price to devices using the Agent mailbox system. Devices can read
+        the price from their mailbox and use it in their local optimization.
 
         Args:
             devices: Dictionary of subordinate device agents
@@ -172,12 +172,23 @@ class PriceSignalProtocol(VerticalProtocol):
                 except (TypeError, ValueError):
                     pass  # Keep current price if conversion fails
 
-        # Broadcast price to all devices via their observation's global_info
-        for device in devices.values():
-            if hasattr(device, "observation") and device.observation is not None:
-                if device.observation.global_info is None:
-                    device.observation.global_info = {}
-                device.observation.global_info["price"] = self.price
+        # Send price message to all devices via mailbox
+
+        if not devices:
+            return
+
+        # Create parent/coordinator ID for message sender
+        parent_id = f"price_coordinator"
+
+        # Create and send message to each device
+        for device_id, device in devices.items():
+            message = Message(
+                sender=parent_id,
+                content={"price": self.price, "type": "price_signal"},
+                recipient=device_id,
+                timestamp=observation.timestamp if observation else 0.0
+            )
+            device.receive_message(message)
 
 
 class SetpointProtocol(VerticalProtocol):
@@ -243,6 +254,58 @@ class SetpointProtocol(VerticalProtocol):
                 action_size = device.action.dim_c + device.action.dim_d
                 device_action = action[offset:offset + action_size]
                 device.act(device.observation, given_action=device_action)
+                offset += action_size
+
+    def coordinate_message(
+        self,
+        devices: Dict[AgentID, Agent],
+        observation: Observation,
+        action: Optional[Any] = None
+    ) -> None:
+        """Send setpoint assignments as messages to devices via mailbox.
+
+        In setpoint control, the coordinator sends explicit power setpoint commands
+        to each device. This is complementary to coordinate_action which directly
+        applies the actions.
+
+        Args:
+            devices: Dictionary of subordinate device agents
+            observation: Current observation from parent
+            action: Action/setpoints computed by parent
+        """
+        if action is None or not devices:
+            return
+
+        parent_id = "setpoint_coordinator"
+
+        if isinstance(action, dict):
+            # Action is dict of {device_id: setpoint}
+            for device_id, setpoint in action.items():
+                if device_id in devices:
+                    message = Message(
+                        sender=parent_id,
+                        content={"setpoint": setpoint, "type": "setpoint_command"},
+                        recipient=device_id,
+                        timestamp=observation.timestamp if observation else 0.0
+                    )
+                    devices[device_id].receive_message(message)
+        else:
+            # Action is numpy array - send portion to each device
+            action = np.asarray(action)
+            offset = 0
+            device_list = list(devices.values())
+
+            for device in device_list:
+                action_size = device.action.dim_c + device.action.dim_d
+                device_setpoint = action[offset:offset + action_size]
+
+                message = Message(
+                    sender=parent_id,
+                    content={"setpoint": device_setpoint.tolist(), "type": "setpoint_command"},
+                    recipient=device.agent_id,
+                    timestamp=observation.timestamp if observation else 0.0
+                )
+                device.receive_message(message)
                 offset += action_size
 
 

@@ -119,41 +119,55 @@ class TestPriceSignalProtocol:
         assert signals["device1"] == {"price": 80.0}
 
     def test_price_protocol_coordinate_message(self):
-        """Test price protocol coordinate_message method."""
+        """Test price protocol coordinate_message uses mailbox system."""
         protocol = PriceSignalProtocol(initial_price=50.0)
 
-        # Create mock devices with observations
+        # Create mock devices
         device1 = MockAgent(agent_id="device1")
-        device1.observation = Observation(local={"state": np.array([1.0])})
-
         device2 = MockAgent(agent_id="device2")
-        device2.observation = Observation(local={"state": np.array([2.0])})
 
         devices = {"device1": device1, "device2": device2}
 
         # Send price message with scalar action
-        protocol.coordinate_message(devices, Observation(), action=65.0)
+        obs = Observation(timestamp=1.0)
+        protocol.coordinate_message(devices, obs, action=65.0)
 
         # Check price was updated
         assert protocol.price == 65.0
 
-        # Check devices received price in global_info
-        assert device1.observation.global_info["price"] == 65.0
-        assert device2.observation.global_info["price"] == 65.0
+        # Check devices received price message in mailbox
+        assert len(device1.mailbox) == 1
+        assert len(device2.mailbox) == 1
+
+        # Verify message content
+        msg1 = device1.mailbox[0]
+        assert msg1.content["price"] == 65.0
+        assert msg1.content["type"] == "price_signal"
+        assert msg1.sender == "price_coordinator"
+        assert msg1.recipient == "device1"
+
+        msg2 = device2.mailbox[0]
+        assert msg2.content["price"] == 65.0
+        assert msg2.recipient == "device2"
 
     def test_price_protocol_coordinate_message_dict_action(self):
         """Test price protocol coordinate_message with dict action."""
         protocol = PriceSignalProtocol(initial_price=50.0)
 
         device = MockAgent(agent_id="device1")
-        device.observation = Observation()
         devices = {"device1": device}
 
         # Send price via dict
-        protocol.coordinate_message(devices, Observation(), action={"price": 70.0})
+        obs = Observation(timestamp=2.0)
+        protocol.coordinate_message(devices, obs, action={"price": 70.0})
 
         assert protocol.price == 70.0
-        assert device.observation.global_info["price"] == 70.0
+
+        # Check message in mailbox
+        assert len(device.mailbox) == 1
+        msg = device.mailbox[0]
+        assert msg.content["price"] == 70.0
+        assert msg.timestamp == 2.0
 
 
 class TestSetpointProtocol:
@@ -265,6 +279,62 @@ class TestSetpointProtocol:
         # Check devices received their portion of the action
         np.testing.assert_array_equal(device1.action_received, np.array([1.0, 2.0]))
         np.testing.assert_array_equal(device2.action_received, np.array([3.0]))
+
+    def test_setpoint_protocol_coordinate_message_with_dict(self):
+        """Test SetpointProtocol coordinate_message with dict action."""
+        protocol = SetpointProtocol()
+
+        device1 = MockAgent(agent_id="device1")
+        device2 = MockAgent(agent_id="device2")
+        devices = {"device1": device1, "device2": device2}
+
+        # Send setpoint messages
+        action = {"device1": np.array([1.5, 2.5]), "device2": np.array([3.5])}
+        obs = Observation(timestamp=5.0)
+        protocol.coordinate_message(devices, obs, action=action)
+
+        # Check messages in mailbox
+        assert len(device1.mailbox) == 1
+        assert len(device2.mailbox) == 1
+
+        msg1 = device1.mailbox[0]
+        assert msg1.content["type"] == "setpoint_command"
+        np.testing.assert_array_equal(msg1.content["setpoint"], np.array([1.5, 2.5]))
+        assert msg1.sender == "setpoint_coordinator"
+        assert msg1.timestamp == 5.0
+
+    def test_setpoint_protocol_coordinate_message_with_array(self):
+        """Test SetpointProtocol coordinate_message with numpy array."""
+        from powergrid.core.actions import Action
+
+        protocol = SetpointProtocol()
+
+        device1 = MockAgent(agent_id="device1")
+        device1.action = Action()
+        device1.action.dim_c = 2
+        device1.action.dim_d = 0
+
+        device2 = MockAgent(agent_id="device2")
+        device2.action = Action()
+        device2.action.dim_c = 1
+        device2.action.dim_d = 0
+
+        devices = {"device1": device1, "device2": device2}
+
+        # Send setpoint array
+        action = np.array([10.0, 20.0, 30.0])
+        obs = Observation(timestamp=10.0)
+        protocol.coordinate_message(devices, obs, action=action)
+
+        # Check messages
+        assert len(device1.mailbox) == 1
+        assert len(device2.mailbox) == 1
+
+        msg1 = device1.mailbox[0]
+        assert msg1.content["setpoint"] == [10.0, 20.0]
+
+        msg2 = device2.mailbox[0]
+        assert msg2.content["setpoint"] == [30.0]
 
 
 class TestHorizontalProtocol:

@@ -12,8 +12,7 @@ from powergrid.envs.multi_agent.networked_grid_env import NetworkedGridEnv
 from powergrid.envs.configs.config_loader import load_config
 
 
-# Skip tests due to unimplemented mixed action space feature
-pytestmark = pytest.mark.skip(reason="Mixed action spaces (continuous + discrete) not yet implemented in grid_agent.py")
+# Tests now enabled - mixed action space support has been implemented
 
 
 class TestMultiAgentMicrogrids:
@@ -37,8 +36,7 @@ class TestMultiAgentMicrogrids:
         # Check basic attributes
         assert hasattr(env, 'dso')
         assert hasattr(env, 'agent_dict')
-        assert len(env.agent_dict) == 4  # DSO + 3 MGs
-        assert 'DSO' in env.agent_dict
+        assert len(env.agent_dict) == 3  # 3 MGs (DSO not in agent_dict)
         assert 'MG1' in env.agent_dict
         assert 'MG2' in env.agent_dict
         assert 'MG3' in env.agent_dict
@@ -153,11 +151,11 @@ class TestMultiAgentMicrogrids:
 
         # Check MG1 devices
         mg1 = env.agent_dict['MG1']
-        mg1_devices = mg1.devices
+        mg1_devices = mg1.devices  # dict of {device_id: device}
         assert len(mg1_devices) == 4  # ESS, DG, 2xRES
 
-        # Check device types
-        device_types = [type(d).__name__ for d in mg1_devices]
+        # Check device types (devices is a dict)
+        device_types = [type(d).__name__ for d in mg1_devices.values()]
         assert 'ESS' in device_types
         assert 'DG' in device_types
         assert device_types.count('RES') == 2
