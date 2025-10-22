@@ -51,6 +51,40 @@ class VerticalProtocol(Protocol):
         """
         pass
 
+    def coordinate_action(
+        self,
+        devices: Dict[AgentID, Agent],
+        observation: Observation,
+        action: Optional[Any] = None
+    ) -> None:
+        """Coordinate device actions (default: no-op).
+
+        This method can be overridden to distribute actions to subordinate devices.
+
+        Args:
+            devices: Dictionary of subordinate device agents
+            observation: Current observation from parent
+            action: Action computed by parent agent
+        """
+        pass
+
+    def coordinate_message(
+        self,
+        devices: Dict[AgentID, Agent],
+        observation: Observation,
+        action: Optional[Any] = None
+    ) -> None:
+        """Send coordination messages to devices (default: no-op).
+
+        This method can be overridden to send messages based on coordination protocol.
+
+        Args:
+            devices: Dictionary of subordinate device agents
+            observation: Current observation from parent
+            action: Action computed by parent agent
+        """
+        pass
+
 
 class NoProtocol(VerticalProtocol):
     """No coordination - subordinates act independently."""

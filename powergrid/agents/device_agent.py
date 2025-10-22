@@ -242,7 +242,7 @@ class DeviceAgent(Agent):
         Returns:
             Reward value (negative cost minus safety penalty)
         """
-        raise NotImplementedError
+        return {"cost": self.cost, "safety": self.safety, "adversarial": self.adversarial}
 
     def feasible_action(self) -> None:
         """Clamp/adjust current action to ensure feasibility.

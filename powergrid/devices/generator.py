@@ -103,9 +103,12 @@ class DG(DeviceAgent):
         if startup_time is not None:
             # enable UC fields on state
             self.startup_time = int(startup_time)
-            self.shutdown_time = int(shutdown_time or 0)
+            self.shutdown_time = int(shutdown_time) if shutdown_time is not None else 0
             self.startup_cost = float(startup_cost)
             self.shutdown_cost = float(shutdown_cost)
+        else:
+            self.startup_time = None
+            self.shutdown_time = None
 
         super().__init__(
             agent_id=name,
@@ -138,7 +141,7 @@ class DG(DeviceAgent):
         self.action.sample()
 
         # UC discrete action (0 = stop/keep off, 1 = start/keep on)
-        if hasattr(self, "startup_time"):
+        if self.startup_time is not None:
             self.action.ncats = 2
             self.action.dim_d = 1
             if self.action.d.size == 0:
@@ -165,15 +168,15 @@ class DG(DeviceAgent):
 
         a = int(self.action.d[0]) if self.action.d.size else 1
         # Shutting down
-        if self.state.on and (a == 0):
-            self.state.shutting += 1
+        if self.state.on and (a == 0) and self.shutdown_time is not None:
+            self.state.shutting = (self.state.shutting or 0) + 1
             if self.state.shutting > self.shutdown_time:
                 self.state.on = 0
                 self.state.shutting = 0
                 self.uc_cost = self.shutdown_cost
         # Starting up
         if (not self.state.on) and (a == 1):
-            self.state.starting += 1
+            self.state.starting = (self.state.starting or 0) + 1
             if self.state.starting > self.startup_time:
                 self.state.on = 1
                 self.state.starting = 0
@@ -212,6 +215,14 @@ class DG(DeviceAgent):
             self.state.on = 1
         self.cost = 0.0
         self.safety = 0.0
+
+    def __repr__(self) -> str:
+        """Return string representation of the DG.
+
+        Returns:
+            String representation
+        """
+        return f"DG(name={self.name}, type={self.type}, bus={self.bus}, P=[{self.min_p_mw}, {self.max_p_mw}]MW)"
 
 
 class RES(DeviceAgent):
@@ -268,8 +279,6 @@ class RES(DeviceAgent):
         self.sn_mva = float(sn_mva)
         self.max_p_mw = float(sn_mva)
         self.min_p_mw = 0.0
-        self.state.Pmax = self.max_p_mw
-        self.state.Pmin = self.min_p_mw
         self.max_q_mvar = float(max_q_mvar)
         self.min_q_mvar = float(min_q_mvar)
         self.cost_curve_coefs = list(cost_curve_coefs)
@@ -293,8 +302,9 @@ class RES(DeviceAgent):
             self.action_callback = True
 
     def set_device_state(self) -> None:
-        """Initialize RES state (no special initialization needed)."""
-        pass
+        """Initialize RES state."""
+        self.state.Pmax = self.max_p_mw
+        self.state.Pmin = self.min_p_mw
 
     # State update methods
     def update_state(self, *, scaling: Optional[float] = None) -> None:
@@ -328,3 +338,11 @@ class RES(DeviceAgent):
             self.state.Q = 0.0
         self.cost = 0.0
         self.safety = 0.0
+
+    def __repr__(self) -> str:
+        """Return string representation of the RES.
+
+        Returns:
+            String representation
+        """
+        return f"RES(name={self.name}, type={self.type}, bus={self.bus}, sn_mva={self.sn_mva}MVA)"

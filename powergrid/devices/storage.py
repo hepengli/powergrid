@@ -131,3 +131,11 @@ class ESS(DeviceAgent):
             self.state.P = 0.0
         self.cost = 0.0
         self.safety = 0.0
+
+    def __repr__(self) -> str:
+        """Return string representation of the ESS.
+
+        Returns:
+            String representation
+        """
+        return f"ESS(name={self.name}, bus={self.bus}, capacity={self.capacity}MWh, P=[{self.min_p_mw}, {self.max_p_mw}]MW)"
