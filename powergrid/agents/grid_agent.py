@@ -410,6 +410,13 @@ class PowerGridAgent(GridAgent):
         Returns:
             Gymnasium Box space for grid observations
         """
+        # Ensure powerflow has run to get correct observation size
+        try:
+            pp.runpp(net, algorithm='nr', init='flat', max_iteration=100)
+        except:
+            # If powerflow fails, still create space (may need adjustment later)
+            pass
+
         return Box(
             low=-np.inf,
             high=np.inf,

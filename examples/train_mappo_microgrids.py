@@ -106,6 +106,15 @@ def parse_args():
 
 def env_creator(env_config):
     """Create environment with RLlib compatibility."""
+    # Load default config if not provided
+    if 'dataset_path' not in env_config:
+        from powergrid.envs.configs.config_loader import load_config
+        default_config = load_config('ieee34_ieee13')
+        # Merge with provided config (provided config takes precedence)
+        for key, value in env_config.items():
+            default_config[key] = value
+        env_config = default_config
+
     env = MultiAgentMicrogrids(env_config)
     # Wrap with PettingZoo wrapper for RLlib
     return ParallelPettingZooEnv(env)
@@ -139,11 +148,14 @@ def main():
     register_env("multi_agent_microgrids", env_creator)
 
     # Create environment to get spaces
-    env_config = {
-        'train': True,
-        'penalty': args.penalty,
-        'share_reward': args.share_reward,
-    }
+    from powergrid.envs.configs.config_loader import load_config
+    env_config = load_config('ieee34_ieee13')
+    # Override with command line args
+    env_config['train'] = True
+    env_config['penalty'] = args.penalty
+    env_config['share_reward'] = args.share_reward
+    env_config['max_episode_steps'] = 96  # 4 days at 1-hour timesteps
+
     temp_env = env_creator(env_config)
 
     # Get policy configuration

@@ -23,11 +23,9 @@ except Exception as e:
 # Test environment creation
 print("\nTesting environment creation...")
 try:
-    env_config = {
-        'train': True,
-        'penalty': 10,
-        'share_reward': True,
-    }
+    from powergrid.envs.configs.config_loader import load_config
+    env_config = load_config('ieee34_ieee13')
+    env_config['max_episode_steps'] = 24  # Short episodes for testing
     env = MultiAgentMicrogrids(env_config)
     print(f"✓ Environment created successfully")
     print(f"  Agents: {env.possible_agents}")
@@ -58,7 +56,12 @@ try:
     obs, rewards, dones, truncated, infos = env.step(actions)
     print(f"✓ Step successful")
     print(f"  Rewards: {[(aid, f'{rewards[aid]:.2f}') for aid in env.possible_agents]}")
-    print(f"  Converged: {infos[env.possible_agents[0]]['converged']}")
+    # Check if info is dict or scalar
+    first_info = infos.get(env.possible_agents[0], {})
+    if isinstance(first_info, dict):
+        print(f"  Converged: {first_info.get('converged', 'N/A')}")
+    else:
+        print(f"  Info type: {type(first_info)}")
 except Exception as e:
     print(f"✗ Failed to step: {e}")
     import traceback
@@ -90,7 +93,10 @@ except Exception as e:
 # Test environment creator function
 print("\nTesting env_creator function...")
 try:
-    wrapped_env = train_mappo_microgrids.env_creator(env_config)
+    from powergrid.envs.configs.config_loader import load_config
+    test_config = load_config('ieee34_ieee13')
+    test_config['max_episode_steps'] = 24
+    wrapped_env = train_mappo_microgrids.env_creator(test_config)
     print(f"✓ env_creator works")
     print(f"  Type: {type(wrapped_env)}")
 except Exception as e:

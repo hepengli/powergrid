@@ -201,6 +201,7 @@ class NetworkedGridEnv(ParallelEnv):
 
         for name, agent in self.agent_dict.items():
             ac_spaces[name] = agent.get_grid_action_space()
+            # Use merged network (self.net) since that's what observe() uses
             ob_spaces[name] = agent.get_grid_observation_space(self.net)
 
         self.action_spaces = ac_spaces
