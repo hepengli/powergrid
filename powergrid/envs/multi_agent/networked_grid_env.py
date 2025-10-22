@@ -26,7 +26,7 @@ class NetworkedGridEnv(ParallelEnv):
         self.agent_dict: Dict[str, PowerGridAgent] = {}
         self.data_size: int = 0
         self._t: int = 0  # current timestep
-        self._day: int = 0  # current day (for non-training mode)
+        # _day will be initialized in reset() for test mode
         self._total_days: int = 0  # total number of days in the dataset
 
         self.env_config = env_config
@@ -157,8 +157,9 @@ class NetworkedGridEnv(ParallelEnv):
             for agent in self.agent_dict.values():
                 agent.reset(seed=seed)
         else:
-            if hasattr(self, '_t'):
+            if hasattr(self, '_day'):
                 self._day += 1
+                self._t = self._day * self.max_episode_steps
             else:
                 self._t, self._day = 0, 0
             for agent in self.agent_dict.values():

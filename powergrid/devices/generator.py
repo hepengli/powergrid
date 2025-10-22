@@ -299,7 +299,13 @@ class RES(DeviceAgent):
             self.action.dim_c = 1
             self.action.sample()
         else:
+            # No Q control - P is determined externally by scaling
+            # Set action_callback and create dummy action space
             self.action_callback = True
+            # Create a dummy discrete action space with 1 option (no-op)
+            self.action.ncats = 1
+            self.action.dim_d = 1
+            self.action.sample()
 
     def set_device_state(self) -> None:
         """Initialize RES state."""

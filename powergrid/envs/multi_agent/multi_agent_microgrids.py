@@ -44,11 +44,13 @@ class MultiAgentMicrogrids(NetworkedGridEnv):
                 - penalty: float, safety penalty multiplier
                 - share_reward: bool, share rewards across agents
         """
-        super().__init__(env_config)
+        # Load dataset before calling super().__init__ since _build_net needs it
         self._dataset = load_dataset(env_config.get('dataset_path'))
-        self._safety = self.env_config.get('penalty')
-        self._convergence_failure_reward = self.env_config.get('convergence_failure_reward', -200.0)
-        self._convergence_failure_safety = self.env_config.get('convergence_failure_safety', 20.0)
+        self._safety = env_config.get('penalty')
+        self._convergence_failure_reward = env_config.get('convergence_failure_reward', -200.0)
+        self._convergence_failure_safety = env_config.get('convergence_failure_safety', 20.0)
+
+        super().__init__(env_config)
 
     def _read_data(self, load_area, renew_area):
         """Read data from dataset with train/test split support.
@@ -83,7 +85,7 @@ class MultiAgentMicrogrids(NetworkedGridEnv):
         )
         self.dso.add_dataset(self._read_data(load_area, renew_area))
         self.dataset_size = self.dso.dataset['price'].size
-        self.total_days = self.data_size // self.max_episode_steps
+        self.total_days = self.dataset_size // self.max_episode_steps
 
         return net
 
@@ -162,13 +164,50 @@ class MultiAgentMicrogrids(NetworkedGridEnv):
 
 
 if __name__ == '__main__':
-    # Example usage
-    env_config = {
-        "train": True,
-        "penalty": 10,
-        "share_reward": True,
-    }
-    env = MultiAgentMicrogrids(env_config)
-    obs, info = env.reset()
-    print(f"Observation keys: {obs.keys()}")
-    print(f"Action spaces: {env.action_spaces}")
+    """Test building MultiAgentMicrogrids environment with real config."""
+    from powergrid.envs.configs.config_loader import load_config
+
+    print("Loading IEEE 34-13 bus configuration...")
+    env_config = load_config('ieee34_ieee13')
+
+    print(f"Config loaded:")
+    print(f"  - Training mode: {env_config['train']}")
+    print(f"  - Dataset: {env_config['dataset_path']}")
+    print(f"  - Number of microgrids: {len(env_config['mg_configs'])}")
+    print(f"  - Penalty: {env_config['penalty']}")
+
+    print("\nBuilding environment...")
+    try:
+        env = MultiAgentMicrogrids(env_config)
+        print("✓ Environment built successfully!")
+
+        print(f"\nEnvironment details:")
+        print(f"  - Total agents: {len(env.agent_dict)}")
+        print(f"  - Agent names: {list(env.agent_dict.keys())}")
+        print(f"  - Actionable agents: {list(env.actionable_agents.keys())}")
+        print(f"  - Dataset size: {env.dataset_size}")
+        print(f"  - Total days: {env.total_days}")
+
+        print("\nResetting environment...")
+        obs, info = env.reset(seed=42)
+        print(f"✓ Reset successful!")
+        print(f"  - Observation keys: {list(obs.keys())}")
+        print(f"  - Observation shapes: {[(k, v.shape) for k, v in obs.items()]}")
+
+        print("\nAction spaces:")
+        for agent_name, space in env.action_spaces.items():
+            print(f"  - {agent_name}: {space}")
+
+        print("\nTaking a test step...")
+        actions = {name: space.sample() for name, space in env.action_spaces.items()}
+        obs_next, rewards, terminateds, truncateds, infos = env.step(actions)
+        print(f"✓ Step successful!")
+        print(f"  - Rewards: {[(k, f'{v:.2f}') for k, v in rewards.items()]}")
+        print(f"  - Converged: {env.net['converged']}")
+
+        print("\n✓ All tests passed! Environment is working correctly.")
+
+    except Exception as e:
+        print(f"\n✗ Error building environment: {e}")
+        import traceback
+        traceback.print_exc()

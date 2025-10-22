@@ -79,7 +79,7 @@ class TestDeviceState:
 
         # P, Q, soc
         assert len(vec) == 3
-        assert vec[2] == 0.8  # SOC
+        np.testing.assert_almost_equal(vec[2], 0.8, decimal=6)  # SOC
 
     def test_as_vector_with_uc_state(self):
         """Test as_vector includes unit commitment state."""

@@ -81,23 +81,23 @@ class DeviceState:
         """
         state = np.array([], dtype=np.float32)
         if self.Pmax is not None:
-            state = np.append(state, self.P)
+            state = np.append(state, np.float32(self.P))
         if self.Qmax is not None:
-            state = np.append(state, self.Q)
+            state = np.append(state, np.float32(self.Q))
         if self.price is not None:
-            state = np.append(state, float(self.price) / 100.)
+            state = np.append(state, np.float32(float(self.price) / 100.))
 
         if self.shutting is not None:
             on_state = np.zeros(2, dtype=np.float32)
             on_state[1 if self.on else 0] = 1
             state = np.concatenate([state, on_state])
-            state = np.append(state, float(self.shutting))
+            state = np.append(state, np.float32(self.shutting))
 
         if self.starting is not None:
-            state = np.append(state, float(self.starting))
+            state = np.append(state, np.float32(self.starting))
 
         if self.soc is not None:
-            state = np.append(state, float(self.soc))
+            state = np.append(state, np.float32(self.soc))
 
         if self.max_step is not None:
             step_vec = (
@@ -116,6 +116,6 @@ class DeviceState:
             state = np.append(state, one_hot)
 
         if self.loading_percentage is not None:
-            state = np.append(state, float(self.loading_percentage) / 100.0)
+            state = np.append(state, np.float32(float(self.loading_percentage) / 100.0))
 
         return state

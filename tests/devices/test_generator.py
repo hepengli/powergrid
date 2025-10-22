@@ -352,7 +352,7 @@ class TestRES:
         res.update_state(scaling=0.8)
 
         assert res.state.P == 1.6  # 80% of 2.0 MW
-        assert res.state.Q == 0.3
+        np.testing.assert_almost_equal(res.state.Q, 0.3, decimal=5)
 
     def test_res_update_cost_safety(self):
         """Test RES safety calculation."""
@@ -433,9 +433,11 @@ class TestRES:
             policy=MockPolicy()
         )
 
-        # Should be in action_callback mode
+        # Should be in action_callback mode with dummy discrete action
         assert res.action_callback
         assert res.action.dim_c == 0
+        assert res.action.dim_d == 1
+        assert res.action.ncats == 1
 
 
 if __name__ == "__main__":

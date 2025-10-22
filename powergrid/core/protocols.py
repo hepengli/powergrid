@@ -16,7 +16,14 @@ from powergrid.agents.base import Agent, AgentID, Observation
 
 class Protocol(ABC):
     """Base class for all coordination protocols."""
-    pass
+
+    def no_op(self) -> bool:
+        """Check if this is a no-operation protocol.
+
+        Returns:
+            True if this protocol performs no coordination (NoProtocol or NoHorizontalProtocol)
+        """
+        return False
 
 
 # =============================================================================
@@ -88,6 +95,10 @@ class VerticalProtocol(Protocol):
 
 class NoProtocol(VerticalProtocol):
     """No coordination - subordinates act independently."""
+
+    def no_op(self) -> bool:
+        """NoProtocol is a no-operation protocol."""
+        return True
 
     def coordinate(
         self,
@@ -194,6 +205,10 @@ class HorizontalProtocol(Protocol):
 
 class NoHorizontalProtocol(HorizontalProtocol):
     """No peer coordination - agents act independently."""
+
+    def no_op(self) -> bool:
+        """NoHorizontalProtocol is a no-operation protocol."""
+        return True
 
     def coordinate(
         self,
