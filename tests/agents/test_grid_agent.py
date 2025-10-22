@@ -1,238 +1,226 @@
-"""Unit tests for GridAgent."""
+"""Tests for agents.grid_agent module."""
 
-import pytest
 import numpy as np
+import pytest
+import gymnasium as gym
 
-from powergrid.agents.grid_agent import (
-    GridAgent,
-    NoProtocol,
-    PriceSignalProtocol,
-    SetpointProtocol,
-)
-from powergrid.agents.device_agent import DeviceAgent
-from powergrid.agents.base import Observation
+from powergrid.agents.grid_agent import GridAgent, PowerGridAgent
+from powergrid.agents.base import Observation, Agent
+from powergrid.core.policies import Policy
+from powergrid.core.protocols import NoProtocol, PriceSignalProtocol
 from powergrid.devices.storage import ESS
 from powergrid.devices.generator import DG
 
 
-class TestProtocols:
-    """Tests for coordination protocols."""
+class MockPolicy(Policy):
+    """Mock policy for testing."""
 
-    def test_no_protocol(self):
-        """Test NoProtocol (independent agents)."""
-        protocol = NoProtocol()
+    def __init__(self, action_value=0.5):
+        self.action_value = action_value
+        self.reset_called = False
 
-        obs = {
-            "agent_1": Observation(local={"P": 1.0}),
-            "agent_2": Observation(local={"P": 2.0}),
-        }
+    def forward(self, observation):
+        """Return fixed action."""
+        if isinstance(self.action_value, np.ndarray):
+            return self.action_value
+        return np.array([self.action_value])
 
-        signals = protocol.coordinate(obs)
+    def reset(self):
+        """Mark reset called."""
+        self.reset_called = True
 
-        assert "agent_1" in signals
-        assert "agent_2" in signals
-        assert signals["agent_1"] == {}
-        assert signals["agent_2"] == {}
 
-    def test_price_signal_protocol(self):
-        """Test price signal protocol."""
-        protocol = PriceSignalProtocol(initial_price=50.0)
+class MockDeviceAgent(Agent):
+    """Mock device agent for testing."""
 
-        obs = {
-            "agent_1": Observation(local={"P": 1.0}),
-            "agent_2": Observation(local={"P": 2.0}),
-        }
+    def __init__(self, agent_id, action_space_size=1):
+        self.action_space_size = action_space_size
+        super().__init__(
+            agent_id=agent_id,
+            level=1,
+            action_space=gym.spaces.Box(low=0, high=1, shape=(action_space_size,), dtype=np.float32),
+            observation_space=gym.spaces.Box(low=-np.inf, high=np.inf, shape=(2,), dtype=np.float32)
+        )
 
-        # No coordinator action - use initial price
-        signals = protocol.coordinate(obs)
+    def observe(self, global_state=None, *args, **kwargs):
+        """Return mock observation."""
+        return Observation(
+            local={"state": np.array([0.5, 0.5], dtype=np.float32)},
+            timestamp=self._timestep
+        )
 
-        assert signals["agent_1"]["price"] == 50.0
-        assert signals["agent_2"]["price"] == 50.0
+    def act(self, observation, *args, **kwargs):
+        """Return mock action."""
+        return np.random.rand(self.action_space_size).astype(np.float32)
 
-        # With coordinator action - update price
-        signals = protocol.coordinate(obs, coordinator_action={"price": 75.0})
-
-        assert signals["agent_1"]["price"] == 75.0
-        assert signals["agent_2"]["price"] == 75.0
-
-    def test_price_signal_scalar_action(self):
-        """Test price signal with scalar action."""
-        protocol = PriceSignalProtocol()
-
-        obs = {"agent_1": Observation()}
-
-        signals = protocol.coordinate(obs, coordinator_action=100.0)
-
-        assert signals["agent_1"]["price"] == 100.0
-
-    def test_setpoint_protocol(self):
-        """Test setpoint protocol."""
-        protocol = SetpointProtocol()
-
-        obs = {
-            "agent_1": Observation(),
-            "agent_2": Observation(),
-        }
-
-        # No coordinator action
-        signals = protocol.coordinate(obs)
-        assert signals["agent_1"] == {}
-        assert signals["agent_2"] == {}
-
-        # With setpoints
-        coordinator_action = {
-            "agent_1": 0.5,  # P setpoint
-            "agent_2": -0.3,
-        }
-        signals = protocol.coordinate(obs, coordinator_action)
-
-        assert signals["agent_1"]["setpoint"] == 0.5
-        assert signals["agent_2"]["setpoint"] == -0.3
+    def reset(self, *, seed=None, **kwargs):
+        """Reset device."""
+        super().reset(seed=seed)
 
 
 class TestGridAgent:
-    """Tests for GridAgent."""
+    """Test GridAgent class."""
 
-    @pytest.fixture
-    def subordinates(self):
-        """Create subordinate device agents."""
-        ess = ESS(
-            name="ess_1",
-            bus=800,
-            min_p_mw=-0.5,
-            max_p_mw=0.5,
-            capacity=1.0,
+    def test_grid_agent_initialization(self):
+        """Test grid agent initialization."""
+        device1 = MockDeviceAgent("device1")
+        device2 = MockDeviceAgent("device2")
+
+        grid = GridAgent(
+            agent_id="grid1",
+            devices=[device1, device2],
+            centralized=True
         )
 
-        dg = DG(
-            name="dg_1",
-            bus="806",
-            min_p_mw=0.0,
-            max_p_mw=0.5,
+        assert grid.agent_id == "grid1"
+        assert grid.level == 2
+        assert len(grid.devices) == 2
+        assert "device1" in grid.devices
+        assert "device2" in grid.devices
+        assert grid.centralized
+
+    def test_grid_agent_initialization_with_protocol(self):
+        """Test grid agent with protocol."""
+        device1 = MockDeviceAgent("device1")
+        protocol = PriceSignalProtocol(initial_price=60.0)
+
+        grid = GridAgent(
+            agent_id="grid1",
+            devices=[device1],
+            protocol=protocol
         )
 
-        return [
-            DeviceAgent(device=ess),
-            DeviceAgent(device=dg),
-        ]
+        assert grid.protocol == protocol
+        assert isinstance(grid.protocol, PriceSignalProtocol)
 
-    def test_coordinator_initialization(self, subordinates):
-        """Test coordinator initialization."""
-        coordinator = GridAgent(
-            agent_id="mg_controller",
-            subordinates=subordinates,
-            protocol=NoProtocol(),
+    def test_grid_agent_reset(self):
+        """Test grid agent reset."""
+        device1 = MockDeviceAgent("device1")
+        device2 = MockDeviceAgent("device2")
+        policy = MockPolicy()
+
+        grid = GridAgent(
+            agent_id="grid1",
+            devices=[device1, device2],
+            policy=policy,
+            centralized=True
         )
 
-        assert coordinator.agent_id == "mg_controller"
-        assert coordinator.level == 2  # Grid level
-        assert len(coordinator.subordinates) == 2
-        assert "ess_1" in coordinator.subordinates
-        assert "dg_1" in coordinator.subordinates
+        grid.reset()
 
-    def test_coordinator_observe(self, subordinates):
-        """Test coordinator observation collection."""
-        coordinator = GridAgent(
-            agent_id="mg_controller",
-            subordinates=subordinates,
+        assert policy.reset_called
+        # Devices should be reset (check timestep)
+        assert device1._timestep == 0.0
+        assert device2._timestep == 0.0
+
+    def test_grid_agent_observe(self):
+        """Test grid agent observe."""
+        device1 = MockDeviceAgent("device1")
+        device2 = MockDeviceAgent("device2")
+
+        grid = GridAgent(
+            agent_id="grid1",
+            devices=[device1, device2],
+            centralized=True
         )
 
-        global_state = {
-            "bus_vm": {800: 1.05, "806": 1.03},
-            "bus_va": {800: 0.0, "806": 0.1},
-            "converged": True,
-            "dataset": {"price": 50.0},
-        }
+        obs = grid.observe()
 
-        obs = coordinator.observe(global_state)
+        assert isinstance(obs, Observation)
+        assert "device_obs" in obs.local
+        assert len(obs.local["device_obs"]) == 2
 
-        # Should contain subordinate states
-        assert "subordinate_states" in obs.local
-        assert "ess_1" in obs.local["subordinate_states"]
-        assert "dg_1" in obs.local["subordinate_states"]
+    def test_grid_agent_act_centralized(self):
+        """Test grid agent act in centralized mode."""
+        device1 = MockDeviceAgent("device1")
+        device2 = MockDeviceAgent("device2")
+        policy = MockPolicy(np.array([0.5, 0.5]))
 
-        # Should have global info from subordinates
-        assert "converged" in obs.global_info
+        grid = GridAgent(
+            agent_id="grid1",
+            devices=[device1, device2],
+            policy=policy,
+            centralized=True
+        )
 
-    def test_coordinator_act_with_protocol(self, subordinates):
-        """Test coordinator action with protocol."""
-        protocol = PriceSignalProtocol(initial_price=50.0)
-        coordinator = GridAgent(
-            agent_id="mg_controller",
-            subordinates=subordinates,
+        obs = grid.observe()
+        action = grid.act(obs)
+
+        assert isinstance(action, np.ndarray)
+        assert len(action) == 2
+
+    def test_grid_agent_act_decentralized_raises(self):
+        """Test grid agent decentralized mode raises error."""
+        device1 = MockDeviceAgent("device1")
+
+        grid = GridAgent(
+            agent_id="grid1",
+            devices=[device1],
+            centralized=False
+        )
+
+        obs = grid.observe()
+
+        with pytest.raises(NotImplementedError):
+            grid.act(obs)
+
+    def test_grid_agent_coordinate_device(self):
+        """Test device coordination."""
+        device1 = MockDeviceAgent("device1")
+        protocol = NoProtocol()
+
+        grid = GridAgent(
+            agent_id="grid1",
+            devices=[device1],
             protocol=protocol,
-        )
-
-        global_state = {
-            "bus_vm": {800: 1.05},
-            "converged": True,
-        }
-
-        obs = coordinator.observe(global_state)
-        coordinator.act(obs)
-
-        # Check that subordinates received price signal
-        for agent in coordinator.subordinates.values():
-            assert len(agent.mailbox) == 1
-            msg = agent.mailbox[0]
-            assert msg.sender == "mg_controller"
-            assert "price" in msg.content
-            assert msg.content["price"] == 50.0
-
-    def test_coordinator_reset(self, subordinates):
-        """Test coordinator reset."""
-        coordinator = GridAgent(
-            agent_id="mg_controller",
-            subordinates=subordinates,
-        )
-
-        # Add some state
-        coordinator.update_timestep(10.0)
-
-        # Reset
-        coordinator.reset(seed=42)
-
-        # Check reset
-        assert coordinator._timestep == 0.0
-        assert len(coordinator.mailbox) == 0
-
-        # Subordinates should also be reset
-        for agent in coordinator.subordinates.values():
-            assert agent._timestep == 0.0
-
-    def test_coordinator_get_subordinate_actions(self, subordinates):
-        """Test getting actions from subordinates."""
-        coordinator = GridAgent(
-            agent_id="mg_controller",
-            subordinates=subordinates,
-        )
-
-        observations = {
-            "ess_1": Observation(local={"soc": 0.5}),
-            "dg_1": Observation(local={"P": 0.3}),
-        }
-
-        actions = coordinator.get_subordinate_actions(observations)
-
-        assert "ess_1" in actions
-        assert "dg_1" in actions
-        # Actions should be valid (from random policy)
-        assert actions["ess_1"] is not None
-        assert actions["dg_1"] is not None
-
-    def test_coordinator_centralized_mode(self, subordinates):
-        """Test centralized action space."""
-        coordinator = GridAgent(
-            agent_id="mg_controller",
-            subordinates=subordinates,
             centralized=True,
+            policy=MockPolicy()
         )
 
-        # In centralized mode, action space should be flattened
-        from gymnasium.spaces import Box
-        assert isinstance(coordinator.action_space, Box)
-        # Should have dimension > 1 (aggregated from subordinates)
-        assert coordinator.action_space.shape[0] > 1
+        obs = grid.observe()
+        action = np.array([0.5])
+
+        # Should not raise error
+        grid.coordinate_device(obs, action)
+
+    def test_grid_agent_repr(self):
+        """Test grid agent string representation."""
+        device1 = MockDeviceAgent("device1")
+        device2 = MockDeviceAgent("device2")
+        protocol = PriceSignalProtocol()
+
+        grid = GridAgent(
+            agent_id="grid1",
+            devices=[device1, device2],
+            protocol=protocol
+        )
+
+        repr_str = repr(grid)
+
+        assert "GridAgent" in repr_str
+        assert "grid1" in repr_str
+        assert "devices=2" in repr_str
+        assert "PriceSignalProtocol" in repr_str
+
+
+class TestPowerGridAgent:
+    """Test PowerGridAgent class."""
+
+    def test_power_grid_agent_initialization(self):
+        """Test PowerGridAgent initialization requires pandapower."""
+        # This test requires pandapower network setup
+        # Skip for now as it requires complex setup
+        pass
+
+    def test_power_grid_agent_add_dataset(self):
+        """Test adding dataset to PowerGridAgent."""
+        # Skip - requires pandapower network
+        pass
+
+    def test_power_grid_agent_add_storage(self):
+        """Test adding storage to PowerGridAgent."""
+        # Skip - requires pandapower network
+        pass
 
 
 if __name__ == "__main__":

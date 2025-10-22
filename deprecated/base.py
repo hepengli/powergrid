@@ -1,3 +1,15 @@
+"""
+DEPRECATED: This module contains legacy multi-agent environment classes.
+
+This module will be removed in v3.0. Please use the new architecture instead:
+- powergrid.envs.multi_agent.MultiAgentPowerGridEnv (PettingZoo-based)
+- powergrid.agents.GridAgent (hierarchical coordinator)
+- powergrid.agents.DeviceAgent (device-level agents)
+
+See docs/ARCHITECTURE_COMPARISON.md for migration guide.
+"""
+
+import warnings
 import numpy as np
 import pandapower as pp
 from ray.rllib.env.multi_agent_env import MultiAgentEnv
@@ -6,10 +18,29 @@ from collections.abc import Iterable
 from gymnasium.spaces import Box, Discrete, MultiDiscrete, Dict
 from ray.rllib.models.preprocessors import get_preprocessor
 
+warnings.warn(
+    "powergrid.envs.multiagent.base is deprecated and will be removed in v3.0. "
+    "Use powergrid.envs.multi_agent.MultiAgentPowerGridEnv instead. "
+    "See docs/ARCHITECTURE_COMPARISON.md for details.",
+    FutureWarning,
+    stacklevel=2
+)
+
 ''' Grid Environment
 '''
 class GridEnv:
+    """
+    DEPRECATED: Use GridAgent instead.
+
+    This class wraps a pandapower network with devices but is NOT a proper RL agent.
+    Use powergrid.agents.GridAgent for the new hierarchical agent architecture.
+    """
     def __init__(self, net, **kwargs):
+        warnings.warn(
+            "GridEnv is deprecated. Use powergrid.agents.GridAgent instead.",
+            FutureWarning,
+            stacklevel=2
+        )
         self.net = net
         self.name = net.name
         self.kwargs = kwargs
@@ -204,7 +235,18 @@ Networked Power Grid Environment
 from abc import abstractmethod
 
 class NetworkedGridEnv(MultiAgentEnv):
+    """
+    DEPRECATED: Use MultiAgentPowerGridEnv instead.
+
+    This class is based on RLlib's MultiAgentEnv and uses GridEnv pseudo-agents.
+    Use powergrid.envs.multi_agent.MultiAgentPowerGridEnv (PettingZoo-based) instead.
+    """
     def __init__(self, env_config):
+        warnings.warn(
+            "NetworkedGridEnv is deprecated. Use MultiAgentPowerGridEnv instead.",
+            FutureWarning,
+            stacklevel=2
+        )
         self.env_config = env_config
         self.train = env_config.get('train', True)
         self.type = env_config.get('type', 'AC')

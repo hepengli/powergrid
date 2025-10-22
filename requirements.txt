@@ -1,8 +1,8 @@
 # Core dependencies
 numpy>=1.21.0,<2.0  # Ray RLlib 2.9.0 requires numpy <2.0
-pandas>=1.3.0
+pandas>=2.3.1  # Required for PandaPower network merging (fixes NAType issue)
 gymnasium>=1.0.0
-pandapower>=2.14.0,<3.0  # Newer versions require numpy 2.0
+pandapower>=3.1.0  # Using 3.1.2, requires pandas >= 2.3.1 for network merging
 
 # Multi-agent RL dependencies
 pettingzoo>=1.24.0

@@ -8,7 +8,7 @@ import ray
 from ray.tune.registry import register_env
 from ray.rllib.algorithms.ppo import PPOConfig
 from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
-from powergrid.envs.multiagent.ieee34_ieee13 import MultiAgentMicrogridsV2
+from powergrid.envs.multi_agent.multi_agent_microgrids import MultiAgentMicrogrids
 
 print("="*70)
 print("MAPPO Training Test")
@@ -22,7 +22,7 @@ print("   ✓ Ray initialized")
 # Create and register environment
 print("\n2. Creating environment...")
 def env_creator(config):
-    env = MultiAgentMicrogridsV2(config)
+    env = MultiAgentMicrogrids(config)
     return ParallelPettingZooEnv(env)
 
 env_config = {'train': True, 'penalty': 10, 'share_reward': True}

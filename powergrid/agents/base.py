@@ -7,9 +7,10 @@ observation/action interfaces.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Union
-import numpy as np
+from typing import Any, Dict, List, Optional, Union
+
 import gymnasium as gym
+import numpy as np
 
 # Type aliases
 AgentID = str
@@ -77,13 +78,13 @@ class Message:
         sender: ID of sending agent
         content: Message payload (e.g., price signals, setpoints, constraints)
         timestamp: Time when message was sent
-        priority: Message priority for scheduling (higher = more urgent)
     """
     sender: AgentID
     content: Dict[str, Any]
+    recipient: Optional[Union[AgentID, List[AgentID]]] = None  # None = broadcast
     timestamp: float = 0.0
-    priority: int = 0
 
+    # TODO: add more attributes like expiration, priority, etc.
 
 class Agent(ABC):
     """Abstract base class for all agents in the hierarchy.
@@ -128,8 +129,19 @@ class Agent(ABC):
         self.mailbox: List[Message] = []
         self._timestep = 0.0
 
+    # Core agent methods (lifecycle)
+    def reset(self, *, seed: Optional[int] = None, **kwargs) -> None:
+        """Reset agent to initial state.
+
+        Args:
+            seed: Random seed for reproducibility
+            **kwargs: Additional reset parameters
+        """
+        self.mailbox.clear()
+        self._timestep = 0.0
+
     @abstractmethod
-    def observe(self, global_state: Dict[str, Any]) -> Observation:
+    def observe(self, global_state: Optional[Dict[str, Any]] = None, *args, **kwargs) -> Observation:
         """Extract relevant observations from global state.
 
         Args:
@@ -145,7 +157,7 @@ class Agent(ABC):
         pass
 
     @abstractmethod
-    def act(self, observation: Observation) -> Any:
+    def act(self, observation: Observation, *args, **kwargs) -> Any:
         """Compute action from observation.
 
         Args:
@@ -155,6 +167,28 @@ class Agent(ABC):
             Action in the format defined by action_space
         """
         pass
+
+    # Communication methods
+    def send_message(
+        self,
+        content: Dict[str, Any],
+        recipients: Optional[Union[AgentID, List[AgentID]]] = None,
+    ) -> Message:
+        """Create a message to send to other agents.
+
+        Args:
+            content: Message payload
+            recipients: List of recipient agent IDs (None = broadcast)
+
+        Returns:
+            Message object (to be delivered by environment)
+        """
+        return Message(
+            sender=self.agent_id,
+            content=content,
+            recipient=recipients,
+            timestamp=self._timestep,
+        )
 
     def receive_message(self, message: Message) -> None:
         """Handle incoming communication from another agent.
@@ -166,29 +200,6 @@ class Agent(ABC):
         """
         self.mailbox.append(message)
 
-    def send_message(
-        self,
-        content: Dict[str, Any],
-        recipients: Optional[List[AgentID]] = None,
-        priority: int = 0,
-    ) -> Message:
-        """Create a message to send to other agents.
-
-        Args:
-            content: Message payload
-            recipients: List of recipient agent IDs (None = broadcast)
-            priority: Message priority (higher = more urgent)
-
-        Returns:
-            Message object (to be delivered by environment)
-        """
-        return Message(
-            sender=self.agent_id,
-            content=content,
-            timestamp=self._timestep,
-            priority=priority,
-        )
-
     def clear_mailbox(self) -> List[Message]:
         """Clear and return all messages from mailbox.
 
@@ -199,17 +210,7 @@ class Agent(ABC):
         self.mailbox.clear()
         return messages
 
-    @abstractmethod
-    def reset(self, *, seed: Optional[int] = None, **kwargs) -> None:
-        """Reset agent to initial state.
-
-        Args:
-            seed: Random seed for reproducibility
-            **kwargs: Additional reset parameters
-        """
-        self.mailbox.clear()
-        self._timestep = 0.0
-
+    # Utility methods
     def update_timestep(self, timestep: float) -> None:
         """Update internal timestep counter.
 

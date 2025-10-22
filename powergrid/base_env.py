@@ -75,7 +75,7 @@ class GridBaseEnv(gym.Env, metaclass=abc.ABCMeta):
             tbl, idx = attach_device_to_net(self.net, self.area, dev)
             self._pp_refs[name] = (tbl, idx)
 
-        self.action_space = self._build_action_space()
+        self.action_space = self._get_action_space()
         self.observation_space = self._build_obs_space()
 
     def reset(
@@ -253,7 +253,7 @@ class GridBaseEnv(gym.Env, metaclass=abc.ABCMeta):
 
         return cont_low, cont_high, disc_nvec, slices
 
-    def _build_action_space(self):
+    def _get_action_space(self):
         cont_low, cont_high, disc_nvec, _ = self._device_action_slices()
         spaces = {}
         if cont_low is not None:

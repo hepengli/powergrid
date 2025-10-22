@@ -2,7 +2,7 @@
 
 import pytest
 import numpy as np
-from powergrid.agents.protocols import (
+from powergrid.core.protocols import (
     PriceSignalProtocol, SetpointProtocol, NoProtocol,
     PeerToPeerTradingProtocol, ConsensusProtocol, NoHorizontalProtocol
 )
