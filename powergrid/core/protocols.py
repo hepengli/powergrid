@@ -143,6 +143,42 @@ class PriceSignalProtocol(VerticalProtocol):
             for sub_id in subordinate_observations
         }
 
+    def coordinate_message(
+        self,
+        devices: Dict[AgentID, Agent],
+        observation: Observation,
+        action: Optional[Any] = None
+    ) -> None:
+        """Send price signal as message to all devices.
+
+        Updates the price and stores it in device observations for their next action.
+        Devices can use the price signal in their local optimization.
+
+        Args:
+            devices: Dictionary of subordinate device agents
+            observation: Current observation from parent
+            action: Action computed by parent (can contain price update)
+        """
+        # Update price from action if provided
+        if action is not None:
+            if isinstance(action, dict):
+                self.price = action.get("price", self.price)
+            elif hasattr(action, "price"):
+                self.price = action.price
+            else:
+                # If action is a scalar, treat it as price
+                try:
+                    self.price = float(action)
+                except (TypeError, ValueError):
+                    pass  # Keep current price if conversion fails
+
+        # Broadcast price to all devices via their observation's global_info
+        for device in devices.values():
+            if hasattr(device, "observation") and device.observation is not None:
+                if device.observation.global_info is None:
+                    device.observation.global_info = {}
+                device.observation.global_info["price"] = self.price
+
 
 class SetpointProtocol(VerticalProtocol):
     """Setpoint-based coordination - parent assigns power setpoints."""
@@ -165,6 +201,49 @@ class SetpointProtocol(VerticalProtocol):
                 signals[sub_id] = {}
 
         return signals
+
+    def coordinate_action(
+        self,
+        devices: Dict[AgentID, Agent],
+        observation: Observation,
+        action: Optional[Any] = None
+    ) -> None:
+        """Distribute actions (setpoints) directly to devices.
+
+        In centralized setpoint control, the parent computes an action vector
+        that contains setpoints for each device. This method distributes those
+        setpoints to the devices.
+
+        Args:
+            devices: Dictionary of subordinate device agents
+            observation: Current observation from parent (unused)
+            action: Action vector from parent (numpy array or dict)
+        """
+        if action is None:
+            return
+
+        # Convert action to device setpoints
+        device_list = list(devices.values())
+
+        if isinstance(action, dict):
+            # Action is already a dict of {device_id: setpoint}
+            for device_id, setpoint in action.items():
+                if device_id in devices:
+                    devices[device_id].act(
+                        devices[device_id].observation,
+                        given_action=setpoint
+                    )
+        else:
+            # Action is a numpy array - split among devices
+            import numpy as np
+            action = np.asarray(action)
+            offset = 0
+            for device in device_list:
+                # Get device action size
+                action_size = device.action.dim_c + device.action.dim_d
+                device_action = action[offset:offset + action_size]
+                device.act(device.observation, given_action=device_action)
+                offset += action_size
 
 
 # =============================================================================
@@ -199,6 +278,26 @@ class HorizontalProtocol(Protocol):
         Returns:
             Dictionary mapping agent_id to coordination signal
             Example: {'MG1': {'trades': [...]}, 'MG2': {'trades': [...]}}
+        """
+        pass
+
+    def coordinate_actions(
+        self,
+        agents: Dict[AgentID, Agent],
+        observations: Dict[AgentID, Observation],
+        actions: Dict[AgentID, Any],
+        net: Optional[Any] = None
+    ) -> None:
+        """Coordinate peer agents' actions (default: no-op).
+
+        Horizontal protocols can modify or coordinate actions across peer agents.
+        For example, P2P trading might adjust power setpoints based on trades.
+
+        Args:
+            agents: Dictionary of peer agents
+            observations: Observations from all agents
+            actions: Actions computed by each agent
+            net: Optional network object (e.g., PandaPower network)
         """
         pass
 

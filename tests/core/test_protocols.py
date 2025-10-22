@@ -118,6 +118,43 @@ class TestPriceSignalProtocol:
         assert protocol.price == 80.0
         assert signals["device1"] == {"price": 80.0}
 
+    def test_price_protocol_coordinate_message(self):
+        """Test price protocol coordinate_message method."""
+        protocol = PriceSignalProtocol(initial_price=50.0)
+
+        # Create mock devices with observations
+        device1 = MockAgent(agent_id="device1")
+        device1.observation = Observation(local={"state": np.array([1.0])})
+
+        device2 = MockAgent(agent_id="device2")
+        device2.observation = Observation(local={"state": np.array([2.0])})
+
+        devices = {"device1": device1, "device2": device2}
+
+        # Send price message with scalar action
+        protocol.coordinate_message(devices, Observation(), action=65.0)
+
+        # Check price was updated
+        assert protocol.price == 65.0
+
+        # Check devices received price in global_info
+        assert device1.observation.global_info["price"] == 65.0
+        assert device2.observation.global_info["price"] == 65.0
+
+    def test_price_protocol_coordinate_message_dict_action(self):
+        """Test price protocol coordinate_message with dict action."""
+        protocol = PriceSignalProtocol(initial_price=50.0)
+
+        device = MockAgent(agent_id="device1")
+        device.observation = Observation()
+        devices = {"device1": device}
+
+        # Send price via dict
+        protocol.coordinate_message(devices, Observation(), action={"price": 70.0})
+
+        assert protocol.price == 70.0
+        assert device.observation.global_info["price"] == 70.0
+
 
 class TestSetpointProtocol:
     """Test SetpointProtocol implementation."""
@@ -170,6 +207,64 @@ class TestSetpointProtocol:
 
         assert signals["device1"] == {"setpoint": 100.0}
         assert signals["device2"] == {}
+
+    def test_setpoint_protocol_coordinate_action_with_dict(self):
+        """Test SetpointProtocol coordinate_action with dict action."""
+        protocol = SetpointProtocol()
+
+        # Create mock devices with action tracking
+        device1 = MockAgent(agent_id="device1")
+        device1.observation = Observation()
+        device1.action_received = None
+        device1.act = lambda obs, given_action=None: setattr(device1, 'action_received', given_action)
+
+        device2 = MockAgent(agent_id="device2")
+        device2.observation = Observation()
+        device2.action_received = None
+        device2.act = lambda obs, given_action=None: setattr(device2, 'action_received', given_action)
+
+        devices = {"device1": device1, "device2": device2}
+
+        # Coordinate with dict action
+        action = {"device1": np.array([1.5]), "device2": np.array([2.5])}
+        protocol.coordinate_action(devices, Observation(), action=action)
+
+        # Check devices received their actions
+        np.testing.assert_array_equal(device1.action_received, np.array([1.5]))
+        np.testing.assert_array_equal(device2.action_received, np.array([2.5]))
+
+    def test_setpoint_protocol_coordinate_action_with_array(self):
+        """Test SetpointProtocol coordinate_action with numpy array action."""
+        from powergrid.core.actions import Action
+
+        protocol = SetpointProtocol()
+
+        # Create mock devices with action dimensions
+        device1 = MockAgent(agent_id="device1")
+        device1.action = Action()
+        device1.action.dim_c = 2
+        device1.action.dim_d = 0
+        device1.observation = Observation()
+        device1.action_received = None
+        device1.act = lambda obs, given_action=None: setattr(device1, 'action_received', given_action)
+
+        device2 = MockAgent(agent_id="device2")
+        device2.action = Action()
+        device2.action.dim_c = 1
+        device2.action.dim_d = 0
+        device2.observation = Observation()
+        device2.action_received = None
+        device2.act = lambda obs, given_action=None: setattr(device2, 'action_received', given_action)
+
+        devices = {"device1": device1, "device2": device2}
+
+        # Coordinate with flat numpy array [device1 actions (2), device2 actions (1)]
+        action = np.array([1.0, 2.0, 3.0])
+        protocol.coordinate_action(devices, Observation(), action=action)
+
+        # Check devices received their portion of the action
+        np.testing.assert_array_equal(device1.action_received, np.array([1.0, 2.0]))
+        np.testing.assert_array_equal(device2.action_received, np.array([3.0]))
 
 
 class TestHorizontalProtocol:
