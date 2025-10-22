@@ -14,10 +14,10 @@ import os
 # Test imports (without ray)
 print("Testing imports...")
 try:
-    from powergrid.envs.multiagent.ieee34_ieee13 import MultiAgentMicrogridsV2
-    print("✓ MultiAgentMicrogridsV2 import successful")
+    from powergrid.envs.multi_agent.multi_agent_microgrids import MultiAgentMicrogrids
+    print("✓ MultiAgentMicrogrids import successful")
 except Exception as e:
-    print(f"✗ Failed to import MultiAgentMicrogridsV2: {e}")
+    print(f"✗ Failed to import MultiAgentMicrogrids: {e}")
     sys.exit(1)
 
 # Test environment creation
@@ -28,7 +28,7 @@ try:
         'penalty': 10,
         'share_reward': True,
     }
-    env = MultiAgentMicrogridsV2(env_config)
+    env = MultiAgentMicrogrids(env_config)
     print(f"✓ Environment created successfully")
     print(f"  Agents: {env.possible_agents}")
     print(f"  Action spaces: {list(env.action_spaces.keys())}")

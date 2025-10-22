@@ -34,7 +34,7 @@ from ray.rllib.env.wrappers.pettingzoo_env import ParallelPettingZooEnv
 from ray.tune.registry import register_env
 
 # Import environment
-from powergrid.envs.multiagent.ieee34_ieee13 import MultiAgentMicrogridsV2
+from powergrid.envs.multi_agent.multi_agent_microgrids import MultiAgentMicrogrids
 
 
 def parse_args():
@@ -106,7 +106,7 @@ def parse_args():
 
 def env_creator(env_config):
     """Create environment with RLlib compatibility."""
-    env = MultiAgentMicrogridsV2(env_config)
+    env = MultiAgentMicrogrids(env_config)
     # Wrap with PettingZoo wrapper for RLlib
     return ParallelPettingZooEnv(env)
 
