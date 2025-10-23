@@ -1,226 +1,208 @@
 from dataclasses import dataclass, field, asdict
-from enum import Enum
-from typing import List, Optional, Dict, Tuple
+from typing import Optional, List, Dict, Type, Any, Iterable, Tuple
 import numpy as np
 
-from .typing import Array, FeatureProvider
-from .registry import ProviderRegistry
-from .utils import _as_f32, _one_hot, _pos_seq_voltage_mag_angle, _circ_mean
-
-class PhaseModel(Enum):
-    BALANCED_1PH = "balanced_1ph"
-    THREE_PHASE = "three_phase"
+from powergrid.core.utils.typing import Array, FeatureProvider
+from powergrid.core.utils.registry import provider
+from powergrid.core.utils.phase import PhaseModel, PhaseSpec
 
 
-class CollapsePolicy(Enum):
-    """How to collapse 3φ → 1φ for voltage."""
-    SUM_PQ_MEAN_V = "sum_pq_mean_v"       # P,Q sum; |V| mean; θ circular mean
-    SUM_PQ_POSSEQ_V = "sum_pq_posseq_v"   # P,Q sum; positive-sequence |V|,∠ (needs 3 phases)
+KNOWN_FEATURES: Dict[str, Type[FeatureProvider]] = {}
 
 
+def _vec_names(feat: FeatureProvider) -> Tuple[np.ndarray, List[str]]:
+    v = np.asarray(feat.vector(), np.float32).ravel()
+    n = feat.names()
+    if len(n) != v.size:
+        raise ValueError(
+            f"{feat.__class__.__name__}: names ({len(n)}) != vector size ({v.size})."
+        )
+    return v, n
+
+
+@provider()
 @dataclass(slots=True)
-class PhaseSpec:
-    phases: str = "ABC"
-    has_neutral: bool = False
-    earth_bond: bool = True
+class DeviceState(FeatureProvider):
+    """
+    DeviceState — phase-owning container that aggregates multiple feature
+    providers (StorageBlock, ElectricalBasePh, PhaseConnection, etc.) into a
+    single feature vector and name list.
+
+    Authoritative phase context:
+      • DeviceState validates its own (phase_model, phase_spec).
+      • It then overrides every child feature's phase_model/spec to match.
+      • After override, each feature is asked to re-validate under the final context:
+          - revalidate_after_context() if available (preferred)
+          - else _validate_inputs_() or _ensure_shapes/_ensure_shapes_() if present
+          - else defer errors to vector()/names()
+
+    No implicit conversions:
+      • We never call to_phase_model() on features.
+      • Users must decide BALANCED_1PH vs THREE_PHASE; DeviceState enforces that
+        choice across children.
+
+    Vector & names:
+      • vectors are concatenated in feature order; empty vectors are skipped.
+      • names are concatenated in the same order; 1:1 parity enforced per feature.
+      • prefix_names=True prepends '<ClassName>.' to each child’s names.
+    """
+
+    phase_model: PhaseModel = PhaseModel.BALANCED_1PH
+    phase_spec: Optional[PhaseSpec] = None  # None allowed for BALANCED_1PH
+
+    features: List[FeatureProvider] = field(default_factory=list)
+    prefix_names: bool = False
 
     def __post_init__(self):
-        if not self.has_neutral and self.earth_bond:
-            self.earth_bond = False  # or raise ValueError(...)
+        self._validate_phase_context_()
+        self._apply_phase_context_to_features_()
 
-    def nph(self) -> int:
-        return len(self.phases)
+    def _validate_phase_context_(self) -> None:
+        if self.phase_model == PhaseModel.THREE_PHASE:
+            if not isinstance(self.phase_spec, PhaseSpec):
+                raise ValueError("THREE_PHASE requires a PhaseSpec.")
+            n = self.phase_spec.nph()
+            if n not in (1, 2, 3):
+                raise ValueError("THREE_PHASE PhaseSpec must have 1, 2, or 3 phases.")
+        elif self.phase_model == PhaseModel.BALANCED_1PH:
+            # Allow None; if provided, must be single-phase
+            if self.phase_spec is not None and self.phase_spec.nph() > 1:
+                raise ValueError("BALANCED_1PH cannot use a multi-phase PhaseSpec.")
+        else:
+            raise ValueError(f"Unsupported phase model: {self.phase_model}")
 
-    def index(self, ph: str) -> int:
-        return self.phases.index(ph)
-    
+    def _apply_phase_context_to_features_(self) -> None:
+        """
+        Override children with the authoritative phase context, then
+        invoke their validators in the final context.
+        """
+        for f in self.features:
+            # 1) Override phase_model if attribute exists
+            if hasattr(f, "phase_model"):
+                try:
+                    setattr(f, "phase_model", self.phase_model)
+                except Exception:
+                    # If a feature refuses reassignment, let it fail later.
+                    pass
 
-@dataclass(slots=True)
-class StatusFlags(FeatureProvider):
-    online: Optional[bool] = None
-    blocked: Optional[bool] = None
+            # 2) Override phase_spec if attribute exists
+            if hasattr(f, "phase_spec"):
+                try:
+                    if self.phase_model == PhaseModel.BALANCED_1PH:
+                        setattr(f, "phase_spec", None)
+                    else:
+                        setattr(f, "phase_spec", self.phase_spec)
+                except Exception:
+                    pass
 
-    def vector(self) -> Array:
-        parts: List[Array] = []
-        for b in (self.online, self.blocked):
-            if b is not None:
-                parts.append(np.array([1.0 if b else 0.0], np.float32))
-        
-        return (
-            np.concatenate(parts, dtype=np.float32) 
-            if parts 
-            else np.zeros(0, np.float32)
-        )
+            # 3) Re-validate under final context if the feature provides hooks
+            #    Try in this order: revalidate_after_context, _validate_inputs_,
+            #    _ensure_shapes, _ensure_shapes_
+            for meth in ("revalidate_after_context",
+                         "_validate_inputs_",
+                         "_ensure_shapes",
+                         "_ensure_shapes_"):
+                if hasattr(f, meth) and callable(getattr(f, meth)):
+                    getattr(f, meth)()
+                    break  # run at most one
 
-    def names(self) -> List[str]:
-        n: List[str] = []
-        if self.online is not None:
-            n.append("online")
-        if self.blocked is not None:
-            n.append("blocked")
-        return n
-
-    def clamp_(self) -> None:
-        pass
-
-    def to_dict(self) -> Dict:
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, d: Dict) -> "StatusFlags":
-        return cls(**{k: d.get(k) for k in ("online", "blocked")})
-
-    def to_phase_model(
-        self,
-        model: PhaseModel,
-        spec: PhaseSpec,
-        policy: CollapsePolicy = CollapsePolicy.SUM_PQ_MEAN_V,
-    ) -> "StatusFlags":
-        return self
-
-
-@dataclass(slots=True)
-class DeviceState:
-    phase_model: PhaseModel = PhaseModel.BALANCED_1PH
-    phase_spec: PhaseSpec = field(default_factory=PhaseSpec)
-    providers: List[FeatureProvider] = field(default_factory=list)
+    def _iter_ready_features(self) -> Iterable[FeatureProvider]:
+        for f in self.features:
+            yield f
 
     def vector(self) -> Array:
-        parts: List[Array] = []
-        for p in self.providers:
-            v = p.vector()
+        vecs: List[np.ndarray] = []
+        for f in self._iter_ready_features():
+            v, _ = _vec_names(f)
             if v.size:
-                parts.append(v)
-        
-        return (
-            np.concatenate(parts, dtype=np.float32) 
-            if parts 
-            else np.zeros(0, np.float32)
-        )
+                vecs.append(v)
+        if not vecs:
+            return np.zeros(0, np.float32)
+        return np.concatenate(vecs, dtype=np.float32)
 
     def names(self) -> List[str]:
         out: List[str] = []
-        for p in self.providers:
-            out.extend(p.names())
+        for f in self._iter_ready_features():
+            _, n = _vec_names(f)
+            if self.prefix_names and n:
+                pref = f.__class__.__name__ + "."
+                n = [pref + s for s in n]
+            out += n
         return out
 
-    def clamp_(self) -> "DeviceState":
-        for p in self.providers:
-            p.clamp_()
-        return self
+    def clamp_(self) -> None:
+        for f in self._iter_ready_features():
+            if hasattr(f, "clamp_"):
+                f.clamp_()
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> Dict[str, Any]:
         return {
-            "phase_model": self.phase_model.value,
-            "phase_spec": {
-                "phases": self.phase_spec.phases,
-                "has_neutral": self.phase_spec.has_neutral,
-                "earth_bond": self.phase_spec.earth_bond,
-            },
-            "providers": [
-                {"type": p.__class__.__name__, "data": p.to_dict()} 
-                for p in self.providers
+            "phase_model": (
+                self.phase_model.value
+                if isinstance(self.phase_model, PhaseModel) else str(self.phase_model)
+            ),
+            "phase_spec": (
+                None if self.phase_spec is None else {
+                    "phases": self.phase_spec.phases,
+                    "has_neutral": self.phase_spec.has_neutral,
+                    "earth_bond": self.phase_spec.earth_bond,
+                }
+            ),
+            "prefix_names": self.prefix_names,
+            "features": [
+                {
+                    "kind": f.__class__.__name__,
+                    "payload": (
+                        f.to_dict() if hasattr(f, "to_dict") else asdict(f)
+                    ),
+                }
+                for f in self.features
             ],
         }
 
     @classmethod
     def from_dict(
-        cls, 
-        d: Dict, 
-        type_map: Optional[Dict[str, type]] = None
+        cls,
+        d: Dict[str, Any],
+        registry: Optional[Dict[str, Type[FeatureProvider]]] = None,
     ) -> "DeviceState":
-        pm = PhaseModel(d.get("phase_model", "balanced_1ph"))
-        psd = d.get("phase_spec", {"phases": "ABC", "has_neutral": False, "earth_bond": True})
-        ps = PhaseSpec(
-            psd.get("phases", "ABC"),
-            psd.get("has_neutral", False),
-            psd.get("earth_bond", True),
-        )
+        pm = d.get("phase_model", PhaseModel.THREE_PHASE)
+        pm = pm if isinstance(pm, PhaseModel) else PhaseModel(pm)
 
-        # Local fallback only for providers defined in THIS file (e.g., StatusFlags).
-        local = {"StatusFlags": StatusFlags}
-
-        # Merge: explicit overrides > local fallback
-        tmap = dict(local)
-        if type_map:
-            tmap.update(type_map)
-
-        provs: List[FeatureProvider] = []
-        for item in d.get("providers", []):
-            typ_name = item["type"]
-            data = item["data"]
-            # Prefer explicit map, else ask the global registry
-            typ = tmap.get(typ_name) or ProviderRegistry.get(typ_name)
-            if typ is None:
-                # Unknown provider type: skip or raise. Skipping is safe:
-                # raise ValueError(f"Unknown provider type: {typ_name}")
-                continue
-            provs.append(typ.from_dict(data))
-
-        return cls(phase_model=pm, phase_spec=ps, providers=provs)
-
-    def to_phase_model(
-        self,
-        model: PhaseModel,
-        spec: Optional[PhaseSpec] = None,
-        policy: CollapsePolicy = CollapsePolicy.SUM_PQ_MEAN_V,
-    ) -> "DeviceState":
-        spec = spec or self.phase_spec
-        new_provs: List[FeatureProvider] = []
-        for p in self.providers:
-            if hasattr(p, "to_phase_model"):
-                new_provs.append(p.to_phase_model(model, spec, policy))
-            else:
-                new_provs.append(p)
-        return DeviceState(phase_model=model, phase_spec=spec, providers=new_provs)
-
-
-    def as_vector(self) -> np.ndarray:
-        """Convert device state to flat numeric vector.
-
-        Only non-None attributes are included in the vector. The order is fixed
-        to ensure consistency across calls.
-
-        Returns:
-            Float32 numpy array containing the state representation
-        """
-        state = np.array([], dtype=np.float32)
-        if self.Pmax is not None:
-            state = np.append(state, self.P)
-        if self.Qmax is not None:
-            state = np.append(state, self.Q)
-        if self.price is not None:
-            state = np.append(state, float(self.price) / 100.)
-
-        if self.shutting is not None:
-            on_state = np.zeros(2, dtype=np.float32)
-            on_state[1 if self.on else 0] = 1
-            state = np.concatenate([state, on_state])
-            state = np.append(state, float(self.shutting))
-
-        if self.starting is not None:
-            state = np.append(state, float(self.starting))
-
-        if self.soc is not None:
-            state = np.append(state, float(self.soc))
-
-        if self.max_step is not None:
-            step_vec = (
-                self.step
-                if isinstance(self.step, np.ndarray)
-                else np.zeros(self.max_step + 1, dtype=np.float32)
+        psd = d.get("phase_spec", None)
+        if psd is None:
+            ps = None
+        elif isinstance(psd, PhaseSpec):
+            ps = psd
+        else:
+            ps = PhaseSpec(
+                psd.get("phases", "ABC"),
+                psd.get("has_neutral", False),
+                psd.get("earth_bond", True),
             )
-            state = np.append(state, step_vec)
 
-        if self.tap_max is not None and self.tap_min is not None:
-            count = self.tap_max - self.tap_min + 1
-            one_hot = np.zeros(count, dtype=np.float32)
-            pos = (self.tap_position if self.tap_position is not None else self.tap_min) - self.tap_min
-            pos = int(np.clip(pos, 0, count - 1))
-            one_hot[pos] = 1
-            state = np.append(state, one_hot)
+        reg = registry or KNOWN_FEATURES
+        feats: List[FeatureProvider] = []
+        for item in d.get("features", []):
+            kind = item.get("kind")
+            payload = item.get("payload", {})
+            cls_ = reg.get(kind)
+            if cls_ is None:
+                raise ValueError(
+                    f"Unknown feature kind '{kind}'. Provide a registry mapping."
+                )
+            if hasattr(cls_, "from_dict"):
+                feats.append(cls_.from_dict(payload))  # type: ignore
+            else:
+                feats.append(cls_(**payload))          # type: ignore
 
-        if self.loading_percentage is not None:
-            state = np.append(state, float(self.loading_percentage) / 100.0)
-
-        return state
+        ds = cls(
+            phase_model=pm,
+            phase_spec=ps,
+            features=feats,
+            prefix_names=d.get("prefix_names", False),
+        )
+        # Defensive: apply again post-build
+        ds._validate_phase_context_()
+        ds._apply_phase_context_to_features_()
+        return ds
