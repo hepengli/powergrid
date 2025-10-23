@@ -2,9 +2,8 @@ from dataclasses import dataclass, field
 from typing import Optional, Tuple, Sequence, Union, List
 import numpy as np
 
-Array = np.ndarray
-FloatArray = np.ndarray
-IntArray = np.ndarray
+from powergrid.core.utils.typing import Array, FloatArray, IntArray
+from powergrid.core.utils.utils import _cat_f32
 
 
 @dataclass(slots=True)
@@ -103,7 +102,9 @@ class Action:
         self.dim_c, self.dim_d = int(dim_c), int(dim_d)
         self.ncats = ncats
         self.c = np.zeros(self.dim_c, dtype=np.float32)
-        self.d = np.zeros(self.dim_d, dtype=np.int32) if self.dim_d else np.array([], dtype=np.int32)
+        self.d = np.array([], dtype=np.int32)
+        if self.dim_d > 0:
+            self.d = np.zeros(self.dim_d, dtype=np.int32)
         self.range = None if range is None else (
             np.asarray(range[0], dtype=np.float32),
             np.asarray(range[1], dtype=np.float32),
@@ -140,7 +141,7 @@ class Action:
             else:
                 for i, (K, mask) in enumerate(zip(Ks, self.masks)):
                     valid = np.flatnonzero(mask)
-                    out[i] = int(rng.choice(valid)) if valid.size else 0  # (validate ensures non-empty)
+                    out[i] = int(rng.choice(valid)) if valid.size else 0
             self.d = out
 
     def clip_(self) -> "Action":
@@ -163,7 +164,9 @@ class Action:
         return x
 
     def unscale(self, x: Sequence[float]) -> FloatArray:
-        """Set `c` from normalized [-1, 1] vector `x` (physical units). Zero-span axes → lb."""
+        """Set `c` from normalized [-1, 1] vector `x` (physical units). 
+           Zero-span axes → lb.
+        """
         x = np.asarray(x, dtype=np.float32)
         if x.shape[0] != self.dim_c:
             raise ValueError("normalized vector length must equal dim_c")
@@ -183,7 +186,8 @@ class Action:
     def as_vector(self) -> FloatArray:
         """Flatten to `[c..., d...]` (float32) for logging/export."""
         if self.dim_d:
-            return np.concatenate([self.c.astype(np.float32), self.d.astype(np.float32)], dtype=np.float32)
+            parts = [self.c.astype(np.float32), self.d.astype(np.float32)]
+            return _cat_f32(parts)
         return self.c.astype(np.float32, copy=True)
 
     @classmethod
@@ -203,8 +207,10 @@ class Action:
             raise ValueError(f"vector length {vec.size} != expected {expected}")
         c = vec[:dim_c].astype(np.float32)
         d = vec[dim_c:].astype(np.int32) if dim_d else np.array([], dtype=np.int32)
-        return cls(c=c, d=d, dim_c=dim_c, dim_d=dim_d, ncats=ncats, range=range,
-                   masks=None if masks is None else [np.asarray(m, bool) for m in masks])
+        return cls(
+            c=c, d=d, dim_c=dim_c, dim_d=dim_d, ncats=ncats, range=range,
+            masks=None if masks is None else [np.asarray(m, bool) for m in masks]
+        )
 
     def reset(self) -> None:
         if self.dim_c:
