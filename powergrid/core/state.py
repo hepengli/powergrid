@@ -79,7 +79,7 @@ class StatusFlags(FeatureProvider):
         return self
 
 
-@dataclass(slots=True)
+@dataclass(slots=False)  # Disable slots to allow __getattr__ and __setattr__
 class DeviceState:
     phase_model: PhaseModel = PhaseModel.BALANCED_1PH
     phase_spec: PhaseSpec = field(default_factory=PhaseSpec)
@@ -178,49 +178,64 @@ class DeviceState:
     def as_vector(self) -> np.ndarray:
         """Convert device state to flat numeric vector.
 
-        Only non-None attributes are included in the vector. The order is fixed
-        to ensure consistency across calls.
+        Uses the provider-based architecture to construct the state vector.
 
         Returns:
             Float32 numpy array containing the state representation
         """
-        state = np.array([], dtype=np.float32)
-        if self.Pmax is not None:
-            state = np.append(state, self.P)
-        if self.Qmax is not None:
-            state = np.append(state, self.Q)
-        if self.price is not None:
-            state = np.append(state, float(self.price) / 100.)
+        return self.vector()
 
-        if self.shutting is not None:
-            on_state = np.zeros(2, dtype=np.float32)
-            on_state[1 if self.on else 0] = 1
-            state = np.concatenate([state, on_state])
-            state = np.append(state, float(self.shutting))
+    def __getattr__(self, name: str):
+        """Compatibility layer: access provider attributes directly.
 
-        if self.starting is not None:
-            state = np.append(state, float(self.starting))
+        This allows backward compatibility with code that accesses state.P, state.Q, etc.
+        """
+        # Avoid recursion on internal attributes
+        if name in ('phase_model', 'phase_spec', 'providers'):
+            raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
 
-        if self.soc is not None:
-            state = np.append(state, float(self.soc))
+        # Alias mappings for backward compatibility
+        alias_map = {
+            'P': 'P_MW',
+            'Q': 'Q_MVAr',
+        }
+        lookup_name = alias_map.get(name, name)
 
-        if self.max_step is not None:
-            step_vec = (
-                self.step
-                if isinstance(self.step, np.ndarray)
-                else np.zeros(self.max_step + 1, dtype=np.float32)
-            )
-            state = np.append(state, step_vec)
+        # Search providers for the attribute
+        providers_list = object.__getattribute__(self, 'providers')
+        for provider in providers_list:
+            if hasattr(provider, lookup_name):
+                return getattr(provider, lookup_name)
 
-        if self.tap_max is not None and self.tap_min is not None:
-            count = self.tap_max - self.tap_min + 1
-            one_hot = np.zeros(count, dtype=np.float32)
-            pos = (self.tap_position if self.tap_position is not None else self.tap_min) - self.tap_min
-            pos = int(np.clip(pos, 0, count - 1))
-            one_hot[pos] = 1
-            state = np.append(state, one_hot)
+        # Default values for commonly accessed attributes that may not exist
+        defaults = {
+            'on': 1.0,  # Devices without UC are always "on"
+        }
+        if name in defaults:
+            return defaults[name]
 
-        if self.loading_percentage is not None:
-            state = np.append(state, float(self.loading_percentage) / 100.0)
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
 
-        return state
+    def __setattr__(self, name: str, value):
+        """Compatibility layer: set provider attributes directly."""
+        # Handle dataclass fields normally
+        if name in ('phase_model', 'phase_spec', 'providers'):
+            object.__setattr__(self, name, value)
+            return
+
+        # Alias mappings for backward compatibility
+        alias_map = {
+            'P': 'P_MW',
+            'Q': 'Q_MVAr',
+        }
+        lookup_name = alias_map.get(name, name)
+
+        # Try to set on existing providers
+        if hasattr(self, 'providers'):
+            for provider in self.providers:
+                if hasattr(provider, lookup_name):
+                    setattr(provider, lookup_name, value)
+                    return
+
+        # If no provider has this attribute, set it as a normal attribute
+        object.__setattr__(self, name, value)
