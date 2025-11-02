@@ -14,7 +14,7 @@ def test_set_specs_initializes_shapes():
     assert a.ncats == 4
 
 
-def test_sample_continuous_and_multidiscrete(rng):
+def test_sample_continuous_and_multidiscrete():
     lb = np.array([-1.0, 0.0], np.float32)
     ub = np.array([+1.0, 2.0], np.float32)
     a = Action().set_specs(dim_c=2, dim_d=3, ncats=[2, 3, 4], range=(lb, ub))
@@ -27,7 +27,7 @@ def test_sample_continuous_and_multidiscrete(rng):
     assert np.all((a.d >= 0) & (a.d < Ks))
 
 
-def test_sampling_respects_per_head_masks(rng):
+def test_sampling_respects_per_head_masks():
     # dim_d=3 with categories [2,3,5]
     masks = [
         np.array([True, False], dtype=bool),            # only {0}
@@ -136,3 +136,10 @@ def test_mask_all_false_raises():
             dim_c=0, dim_d=1, ncats=[3],
             masks=[np.array([False, False, False])]
         )
+
+
+if __name__ == "__main__":
+    import sys
+    print(f"Running {__file__} as standalone test module...\n")
+    # You can pass pytest args like -q, -v, etc.
+    raise SystemExit(pytest.main([__file__] + sys.argv[1:]))
