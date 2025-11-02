@@ -4,9 +4,9 @@ from dataclasses import dataclass, field, asdict
 from typing import Optional, List, Dict
 import numpy as np
 
-from powergrid.core.utils.typing import FeatureProvider
+from powergrid.core.features.base import FeatureProvider
 from powergrid.core.state import PhaseModel, PhaseSpec
-from powergrid.core.utils.registry import provider
+from powergrid.utils.registry import provider
 
 _CONN_SET = {"A", "B", "C", "AB", "BC", "CA", "ABC"}
 

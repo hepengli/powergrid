@@ -5,18 +5,17 @@ implementations that extend DeviceAgent with power generation capabilities.
 """
 
 from typing import Any, Dict, Optional, Sequence
-from dataclasses import dataclass, field
-from builtins import float as builtin_float
+from dataclasses import dataclass
 
 import numpy as np
 
 from powergrid.agents.device_agent import DeviceAgent
 from powergrid.core.policies import Policy
 from powergrid.core.protocols import NoProtocol, Protocol
-from powergrid.core.providers.electrical import ElectricalBasePh
+from powergrid.core.features.electrical import ElectricalBasePh
 from powergrid.core.typing import Array, FeatureProvider
 from powergrid.core.state import PhaseModel, PhaseSpec
-from powergrid.core.registry import provider
+from powergrid.utils.registry import provider
 from powergrid.utils.cost import cost_from_curve
 from powergrid.utils.safety import pf_penalty, s_over_rating
 
@@ -26,16 +25,16 @@ from powergrid.utils.safety import pf_penalty, s_over_rating
 @dataclass(slots=True)
 class GeneratorLimits(FeatureProvider):
     """Provider for generator power limits and constraints."""
-    Pmax: Optional[builtin_float] = None
-    Pmin: Optional[builtin_float] = None
-    Qmax: Optional[builtin_float] = None
-    Qmin: Optional[builtin_float] = None
+    Pmax: Optional[float] = None
+    Pmin: Optional[float] = None
+    Qmax: Optional[float] = None
+    Qmin: Optional[float] = None
 
     def vector(self) -> Array:
         parts = []
         for v in (self.Pmax, self.Pmin, self.Qmax, self.Qmin):
             if v is not None:
-                parts.append(np.array([builtin_float(v)], np.float32))
+                parts.append(np.array([float(v)], np.float32))
         return np.concatenate(parts, dtype=np.float32) if parts else np.zeros(0, np.float32)
 
     def names(self) -> list[str]:
@@ -74,9 +73,9 @@ class GeneratorLimits(FeatureProvider):
 @dataclass(slots=True)
 class UnitCommitment(FeatureProvider):
     """Provider for unit commitment state."""
-    on: builtin_float = 1.0  # 0 or 1
-    starting: builtin_float = 0.0  # timesteps in startup sequence
-    shutting: builtin_float = 0.0  # timesteps in shutdown sequence
+    on: float = 1.0  # 0 or 1
+    starting: float = 0.0  # timesteps in startup sequence
+    shutting: float = 0.0  # timesteps in shutdown sequence
 
     def vector(self) -> Array:
         return np.array([self.on, self.starting, self.shutting], dtype=np.float32)
@@ -85,9 +84,9 @@ class UnitCommitment(FeatureProvider):
         return ["on", "starting", "shutting"]
 
     def clamp_(self) -> None:
-        self.on = builtin_float(np.clip(self.on, 0.0, 1.0))
-        self.starting = builtin_float(max(0.0, self.starting))
-        self.shutting = builtin_float(max(0.0, self.shutting))
+        self.on = float(np.clip(self.on, 0.0, 1.0))
+        self.starting = float(max(0.0, self.starting))
+        self.shutting = float(max(0.0, self.shutting))
 
     def to_dict(self) -> dict:
         return {"on": self.on, "starting": self.starting, "shutting": self.shutting}
@@ -287,7 +286,7 @@ class DG(DeviceAgent):
     def update_cost_safety(self) -> None:
         """Calculate cost and safety penalties."""
         electrical_block = self._get_electrical_block()
-        P = builtin_float(electrical_block.P_MW or 0.0)
+        P = float(electrical_block.P_MW or 0.0)
         cost = cost_from_curve(P, self.cost_curve_coefs)
 
         # Get 'on' state from UC if available, otherwise assume on
@@ -301,7 +300,7 @@ class DG(DeviceAgent):
         # Safety penalties
         safety = 0.0
         if self.action.dim_c > 1:
-            Q = builtin_float(electrical_block.Q_MVAr or 0.0)
+            Q = float(electrical_block.Q_MVAr or 0.0)
             safety += s_over_rating(P, Q, self.sn_mva)
             safety += pf_penalty(P, Q, self.min_pf)
 
@@ -452,7 +451,7 @@ class RES(DeviceAgent):
         self.state.providers = [electrical_block, gen_limits]
 
     # State update methods
-    def update_state(self, *, scaling: Optional[builtin_float] = None) -> None:
+    def update_state(self, *, scaling: Optional[float] = None) -> None:
         """Update RES state from scaling factor and Q action.
 
         Args:
@@ -462,18 +461,18 @@ class RES(DeviceAgent):
 
         if scaling is not None:
             assert 0.0 <= scaling <= 1.0
-            electrical_block.P_MW = builtin_float(self.sn_mva * scaling)
+            electrical_block.P_MW = float(self.sn_mva * scaling)
         if self.action.c.size > 0:
-            electrical_block.Q_MVAr = builtin_float(self.action.c if np.isscalar(self.action.c) else self.action.c[0])
+            electrical_block.Q_MVAr = float(self.action.c if np.isscalar(self.action.c) else self.action.c[0])
 
     def update_cost_safety(self) -> None:
         """Calculate safety penalty for apparent power exceeding rating."""
         electrical_block = self._get_electrical_block()
 
         if self.action.c.size > 0:
-            P = builtin_float(electrical_block.P_MW or 0.0)
-            Q = builtin_float(electrical_block.Q_MVAr or 0.0)
-            S = builtin_float(np.hypot(P, Q))
+            P = float(electrical_block.P_MW or 0.0)
+            Q = float(electrical_block.Q_MVAr or 0.0)
+            S = float(np.hypot(P, Q))
             self.safety = max(0.0, S - self.sn_mva) * self.dt
         else:
             self.safety = 0.0

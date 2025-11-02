@@ -2,8 +2,8 @@ from dataclasses import dataclass, field
 from typing import Optional, Tuple, Sequence, Union, List
 import numpy as np
 
-from powergrid.core.utils.typing import Array, FloatArray, IntArray
-from powergrid.core.utils.utils import _cat_f32
+from powergrid.utils.typing import Array, FloatArray, IntArray
+from powergrid.utils.array_utils import _cat_f32
 
 
 @dataclass(slots=True)

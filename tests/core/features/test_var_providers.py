@@ -2,7 +2,7 @@ import pytest, json
 import numpy as np
 
 from powergrid.core.features import ShuntCapacitorBlock
-from powergrid.core.utils.phase import PhaseModel, PhaseSpec
+from powergrid.utils.phase import PhaseModel, PhaseSpec
 
 
 def _assert_vector_names_consistent(b: ShuntCapacitorBlock):

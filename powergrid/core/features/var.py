@@ -2,10 +2,12 @@ from dataclasses import dataclass, field, asdict
 from typing import Optional, List, Dict
 import numpy as np
 
-from powergrid.core.utils.registry import provider
-from powergrid.core.utils.utils import _as_f32, _cat_f32
-from powergrid.core.utils.typing import Array, FeatureProvider
-from powergrid.core.utils.phase import PhaseModel, PhaseSpec, ensure_phase_context
+from powergrid.utils.registry import provider
+from powergrid.utils.array_utils import _as_f32, _cat_f32
+from powergrid.utils.typing import Array
+from powergrid.core.features.base import FeatureProvider
+
+from powergrid.utils.phase import PhaseModel, PhaseSpec
 
 
 @provider()

@@ -1,10 +1,7 @@
-import numpy as np
 
 from typing import Protocol, List, Dict
+from powergrid.utils.typing import Array
 
-Array = np.ndarray
-FloatArray = np.ndarray
-IntArray = np.ndarray
 
 class FeatureProvider(Protocol):
     def vector(self) -> Array: ...
@@ -14,4 +11,3 @@ class FeatureProvider(Protocol):
     @classmethod
     def from_dict(cls, d: Dict): ...
     def to_phase_model(self, *args, **kwargs): ...
-
