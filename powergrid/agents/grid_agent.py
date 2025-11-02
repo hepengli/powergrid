@@ -15,7 +15,7 @@ from powergrid.agents.base import Agent, AgentID, Observation
 from powergrid.agents.device_agent import DeviceAgent
 from powergrid.core.policies import Policy
 from powergrid.core.protocols import NoProtocol, Protocol
-from powergrid.devices.generator import RES
+from powergrid.devices.generator import GENERATOR, RES
 from powergrid.devices.storage import ESS
 
 
@@ -157,8 +157,8 @@ class GridAgent(Agent):
             observation: Current observation
             action: Computed action from coordinator
         """
-        self.protocol.coordinate_action(self.devices, observation, action)
-        self.protocol.coordinate_message(self.devices, observation, action)
+        self.protocol.coordinate_actions(self.devices, observation, action)
+        self.protocol.coordinate_messages(self.devices, observation, action)
 
     def get_device_actions(
         self,
@@ -206,7 +206,7 @@ class PowerGridAgent(GridAgent):
 
     def __init__(
         self,
-        net,
+        net: pp.pandapowerNet,
         grid_config: DictType[str, Any],
         *,
         # Base class args
@@ -228,7 +228,7 @@ class PowerGridAgent(GridAgent):
         self.net = net
         self.name = net.name
         self.config = grid_config
-        self.sgen: DictType[str, RES] = {}
+        self.sgen: DictType[str, GENERATOR] = {}
         self.storage: DictType[str, ESS] = {}
         self.base_power = grid_config.get("base_power", 1)
         self.load_scale = grid_config.get("load_scale", 1)
@@ -456,8 +456,31 @@ class PowerGridAgent(GridAgent):
                 dg.update_state()
             local_ids = pp.get_element_index(net, 'sgen', self.name + ' ' + name)
             states = ['p_mw', 'q_mvar', 'in_service']
-            values = [dg.state.P, dg.state.Q, bool(dg.state.on)]
+            values = [dg.electrical_block.P_MW, dg.electrical_block.Q_MVAr, bool(dg.uc_state.on)]
             net.sgen.loc[local_ids, states] = values
+
+    def sync_global_state(self, net, t):
+        """Sync global state from PandaPower network to devices.
+
+        Args:
+            net: PandaPower network with power flow results
+            t: Current timestep
+        """
+        for name, ess in self.storage.items():
+            local_ids = pp.get_element_index(net, 'storage', self.name + ' ' + name)
+            p_mw = net.res_storage.loc[local_ids, 'p_mw'].values[0]
+            q_mvar = net.res_storage.loc[local_ids, 'q_mvar'].values[0]
+            soc_percent = net.storage.loc[local_ids, 'soc_percent'].values[0]
+            ess.electrical_block.P_MW = p_mw
+            ess.electrical_block.Q_MVAr = q_mvar
+            ess.storage_block.soc = soc_percent
+
+        for name, dg in self.sgen.items():
+            local_ids = pp.get_element_index(net, 'sgen', self.name + ' ' + name)
+            p_mw = net.res_sgen.loc[local_ids, 'p_mw'].values[0]
+            q_mvar = net.res_sgen.loc[local_ids, 'q_mvar'].values[0]
+            dg.electrical_block.P_MW = p_mw
+            dg.electrical_block.Q_MVAr = q_mvar
 
     def update_cost_safety(self, net):
         """Update cost and safety metrics for the grid.

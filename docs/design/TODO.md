@@ -6,3 +6,5 @@ step function for grid (S0 initially)
     - update_state for global state (S1 -> S2)
     - populate global state to individuals (S2 to local)
 
+Find out where the schedule the action/update actionable agents
+

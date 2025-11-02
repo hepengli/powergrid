@@ -3,7 +3,8 @@ from typing import Any, Dict, Optional, List
 from dataclasses import dataclass
 
 from powergrid.core.policies import Policy
-from powergrid.core.typing import Array, FeatureProvider
+from powergrid.utils.typing import Array
+from powergrid.devices.features.base import FeatureProvider
 from powergrid.core.state import PhaseModel, PhaseSpec
 from powergrid.utils.registry import provider
 from powergrid.agents.device_agent import DeviceAgent
@@ -88,7 +89,7 @@ class Shunt(DeviceAgent):
         self.action.dim_d = 1
         self.action.sample()
 
-    def set_device_state(self):
+    def set_device_state(self, config: Dict[str, Any]) -> None:
         # Create step state provider
         step_state = StepState(
             max_step=self.max_step,

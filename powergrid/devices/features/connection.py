@@ -4,7 +4,7 @@ from dataclasses import dataclass, field, asdict
 from typing import Optional, List, Dict
 import numpy as np
 
-from powergrid.core.features.base import FeatureProvider
+from powergrid.devices.features.base import FeatureProvider
 from powergrid.core.state import PhaseModel, PhaseSpec
 from powergrid.utils.registry import provider
 

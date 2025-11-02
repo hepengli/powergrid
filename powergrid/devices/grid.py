@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 from powergrid.agents.device_agent import DeviceAgent
 from powergrid.core.protocols import NoProtocol, Protocol
 from powergrid.core.policies import Policy
-from ..utils.cost import energy_cost
+from powergrid.utils.cost import energy_cost
 
 class Grid(DeviceAgent):
     """Main grid interface. Convention: P>0 buys, P<0 sells."""
@@ -39,7 +39,7 @@ class Grid(DeviceAgent):
     def set_action_space(self) -> None:
         pass
 
-    def set_device_state(self) -> None:
+    def set_device_state(self, config: Dict[str, Any]) -> None:
         self.state.P = 0.0
         self.state.Q = 0.0
         self.state.price = 0.0

@@ -1,11 +1,11 @@
 from typing import Any, Optional, Dict
 from builtins import float
 
-from ..agents.device_agent import DeviceAgent
-from ..core.protocols import NoProtocol, Protocol
-from ..core.policies import Policy
-from ..utils.cost import tap_change_cost
-from ..utils.safety import loading_over_pct
+from powergrid.agents.device_agent import DeviceAgent
+from powergrid.core.protocols import NoProtocol, Protocol
+from powergrid.core.policies import Policy
+from powergrid.utils.cost import tap_change_cost
+from powergrid.utils.safety import loading_over_pct
 
 
 class Transformer(DeviceAgent):
@@ -50,7 +50,7 @@ class Transformer(DeviceAgent):
             self.action.dim_d = 1
             self.action.sample()
 
-    def set_device_state(self) -> None:
+    def set_device_state(self, config: Dict[str, Any]) -> None:
         self.state.loading_percentage = 0.0
         self.state.tap_position = self.tap_min if self.tap_min is not None else 0
         if self.tap_max is not None and self.tap_min is not None:

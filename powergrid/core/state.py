@@ -3,7 +3,7 @@ from typing import Optional, List, Dict, Type, Any, Iterable, Tuple
 import numpy as np
 
 from powergrid.utils.typing import Array
-from powergrid.core.features.base import FeatureProvider
+from powergrid.devices.features.base import FeatureProvider
 from powergrid.utils.registry import provider
 from powergrid.utils.phase import PhaseModel, PhaseSpec
 
@@ -23,7 +23,7 @@ def _vec_names(feat: FeatureProvider) -> Tuple[np.ndarray, List[str]]:
 
 @provider()
 @dataclass(slots=True)
-class DeviceState(FeatureProvider):
+class DeviceState:
     """
     DeviceState — phase-owning container that aggregates multiple feature
     providers (StorageBlock, ElectricalBasePh, PhaseConnection, etc.) into a
@@ -110,6 +110,8 @@ class DeviceState(FeatureProvider):
     def _iter_ready_features(self) -> Iterable[FeatureProvider]:
         for f in self.features:
             yield f
+
+
 @dataclass(slots=False)  # Disable slots to allow __getattr__ and __setattr__
 class DeviceState:
     phase_model: PhaseModel = PhaseModel.BALANCED_1PH
@@ -197,8 +199,7 @@ class DeviceState:
                 raise ValueError(
                     f"Unknown feature kind '{kind}'. Provide a registry mapping."
                 )
-            if hasattr(cls_, "
-                       "):
+            if hasattr(cls_, "from_dict"):
                 feats.append(cls_.from_dict(payload))  # type: ignore
             else:
                 feats.append(cls_(**payload))          # type: ignore
