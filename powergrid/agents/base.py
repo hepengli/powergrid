@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Union
 import gymnasium as gym
 import numpy as np
 
+
 # Type aliases
 AgentID = str
 Array = np.ndarray

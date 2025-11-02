@@ -1,4 +1,5 @@
-from typing import Dict, Type, Optional
+from typing import Dict, Optional, Type
+
 
 class ProviderRegistry:
     _types: Dict[str, Type] = {}

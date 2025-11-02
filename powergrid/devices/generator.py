@@ -4,21 +4,21 @@ This module provides distributed generator (DG) and renewable energy source (RES
 implementations that extend DeviceAgent with power generation capabilities.
 """
 
-from typing import Any, Dict, Optional, Sequence, Union
 from dataclasses import dataclass
+from typing import Any, Dict, Optional, Sequence, Union
 
 import numpy as np
 
 from powergrid.agents.device_agent import DeviceAgent
 from powergrid.core.policies import Policy
 from powergrid.core.protocols import NoProtocol, Protocol
-from powergrid.devices.features.electrical import ElectricalBasePh
-from powergrid.utils.typing import Array
-from powergrid.devices.features.base import FeatureProvider
 from powergrid.core.state import PhaseModel, PhaseSpec
-from powergrid.utils.registry import provider
+from powergrid.devices.features.base import FeatureProvider
+from powergrid.devices.features.electrical import ElectricalBasePh
 from powergrid.utils.cost import cost_from_curve
+from powergrid.utils.registry import provider
 from powergrid.utils.safety import pf_penalty, s_over_rating
+from powergrid.utils.typing import Array
 
 
 # Create provider for generator limits

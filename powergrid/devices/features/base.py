@@ -1,5 +1,5 @@
+from typing import Dict, List, Protocol
 
-from typing import Protocol, List, Dict
 from powergrid.utils.typing import Array
 
 

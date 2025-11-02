@@ -1,11 +1,12 @@
 # connection.py (only the changed/clarified parts)
 
-from dataclasses import dataclass, field, asdict
-from typing import Optional, List, Dict
+from dataclasses import asdict, dataclass, field
+from typing import Dict, List, Optional
+
 import numpy as np
 
-from powergrid.devices.features.base import FeatureProvider
 from powergrid.core.state import PhaseModel, PhaseSpec
+from powergrid.devices.features.base import FeatureProvider
 from powergrid.utils.registry import provider
 
 _CONN_SET = {"A", "B", "C", "AB", "BC", "CA", "ABC"}

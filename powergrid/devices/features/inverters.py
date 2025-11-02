@@ -1,12 +1,12 @@
-from dataclasses import dataclass, field, asdict
-from typing import Optional, List, Dict, Literal
+from dataclasses import asdict, dataclass, field
+from typing import Dict, List, Literal, Optional
+
 import numpy as np
 
-from powergrid.utils.typing import Array
 from powergrid.devices.features.base import FeatureProvider
-
-from powergrid.utils.registry import provider
 from powergrid.utils.phase import PhaseModel, PhaseSpec
+from powergrid.utils.registry import provider
+from powergrid.utils.typing import Array
 
 CtrlMode = Literal["q_set", "pf_set", "volt_var", "off"]
 

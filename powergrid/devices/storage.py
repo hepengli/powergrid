@@ -1,12 +1,12 @@
-from typing import Any, Optional, Dict
+from typing import Any, Dict, Optional
 
 import numpy as np
 
 from powergrid.agents.device_agent import DeviceAgent
-from powergrid.core.protocols import NoProtocol, Protocol
 from powergrid.core.policies import Policy
-from powergrid.devices.features.storage import StorageBlock
+from powergrid.core.protocols import NoProtocol, Protocol
 from powergrid.devices.features.electrical import ElectricalBasePh
+from powergrid.devices.features.storage import StorageBlock
 from powergrid.utils.cost import cost_from_curve
 from powergrid.utils.safety import s_over_rating, soc_bounds_penalty
 

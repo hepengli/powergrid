@@ -1,11 +1,12 @@
-from dataclasses import dataclass, field, asdict
-from typing import Optional, List, Dict, Type, Any, Tuple, Iterator
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Type
+
 import numpy as np
 
-from powergrid.utils.typing import Array
 from powergrid.devices.features.base import FeatureProvider
-from powergrid.utils.registry import provider
 from powergrid.utils.phase import PhaseModel, PhaseSpec
+from powergrid.utils.registry import provider
+from powergrid.utils.typing import Array
 
 
 KNOWN_FEATURES: Dict[str, Type[FeatureProvider]] = {}

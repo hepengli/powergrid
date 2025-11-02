@@ -5,9 +5,9 @@ This is a modernized version of the legacy MultiAgentMicrogrids that uses
 PowerGridAgent instead of GridEnv while maintaining identical logic.
 """
 
+from typing import List
 
 import pandapower as pp
-from typing import List
 
 from powergrid.agents.grid_agent import PowerGridAgent
 from powergrid.data.data_loader import load_dataset

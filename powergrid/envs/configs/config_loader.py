@@ -1,8 +1,9 @@
 """Configuration loader utility for loading YAML environment configs."""
 
-import yaml
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
+
+import yaml
 
 
 def load_config(config_name: str) -> Dict[str, Any]:

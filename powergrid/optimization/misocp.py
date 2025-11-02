@@ -1,15 +1,47 @@
+import os
+import pickle
+
 import numpy as np
 import pandapower as pp
-from pyscipopt import Model, quicksum
-from powergrid.networks.ieee34 import IEEE34Bus
 from matplotlib import pyplot as plt
-from pandapower.pypower.idx_bus import BUS_I, BASE_KV, PD, QD, GS, BS, VMAX, VMIN, BUS_TYPE, NONE, VM, VA, \
-    CID, CZD, bus_cols, REF
-from pandapower.pypower.idx_brch import F_BUS, T_BUS, BR_R, BR_X, BR_B, TAP, SHIFT, BR_STATUS, RATE_A, \
-    BR_R_ASYM, BR_X_ASYM, branch_cols
+from pandapower.pypower.idx_brch import (
+    BR_B,
+    BR_R,
+    BR_R_ASYM,
+    BR_STATUS,
+    BR_X,
+    BR_X_ASYM,
+    F_BUS,
+    RATE_A,
+    SHIFT,
+    T_BUS,
+    TAP,
+    branch_cols,
+)
+from pandapower.pypower.idx_bus import (
+    BASE_KV,
+    BS,
+    BUS_I,
+    BUS_TYPE,
+    CID,
+    CZD,
+    GS,
+    NONE,
+    PD,
+    QD,
+    REF,
+    VA,
+    VM,
+    VMAX,
+    VMIN,
+    bus_cols,
+)
+from pyscipopt import Model, quicksum
+
+from powergrid.networks.ieee34 import IEEE34Bus
+
 
 def read_data():
-    import pickle, os
     # Update path to point to data directory from new location
     f = open(os.path.join(os.path.dirname(__file__), '../../data','data2018-2020.pkl'), 'rb')
     data = pickle.load(f)

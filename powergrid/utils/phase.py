@@ -1,8 +1,8 @@
-import numpy as np
-
 from dataclasses import dataclass, replace
 from enum import Enum
-from typing import Dict, Tuple, Iterable
+from typing import Dict, Iterable, Tuple
+
+import numpy as np
 
 class CollapsePolicy(Enum):
     """How to collapse 3φ → 1φ for voltage."""

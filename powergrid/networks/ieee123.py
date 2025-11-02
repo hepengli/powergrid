@@ -1,5 +1,7 @@
 import pandapower as pp
+
 from powergrid.networks.lines import *
+
 
 def IEEE123Bus(name=''):
     """
