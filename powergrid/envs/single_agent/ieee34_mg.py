@@ -5,7 +5,7 @@ import pandapower as pp
 from os.path import dirname, abspath
 from collections import OrderedDict
 
-from powergrid.base_env import GridBaseEnv
+from deprecated.base_env import GridBaseEnv
 from powergrid.networks.ieee34 import IEEE34Bus
 from powergrid.devices import *
 
