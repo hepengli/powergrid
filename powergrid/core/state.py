@@ -109,6 +109,11 @@ class DeviceState(FeatureProvider):
     def _iter_ready_features(self) -> Iterable[FeatureProvider]:
         for f in self.features:
             yield f
+@dataclass(slots=False)  # Disable slots to allow __getattr__ and __setattr__
+class DeviceState:
+    phase_model: PhaseModel = PhaseModel.BALANCED_1PH
+    phase_spec: PhaseSpec = field(default_factory=PhaseSpec)
+    providers: List[FeatureProvider] = field(default_factory=list)
 
     def vector(self) -> Array:
         vecs: List[np.ndarray] = []
@@ -191,7 +196,8 @@ class DeviceState(FeatureProvider):
                 raise ValueError(
                     f"Unknown feature kind '{kind}'. Provide a registry mapping."
                 )
-            if hasattr(cls_, "from_dict"):
+            if hasattr(cls_, "
+                       "):
                 feats.append(cls_.from_dict(payload))  # type: ignore
             else:
                 feats.append(cls_(**payload))          # type: ignore
@@ -206,3 +212,77 @@ class DeviceState(FeatureProvider):
         ds._validate_phase_context_()
         ds._apply_phase_context_to_features_()
         return ds
+        spec = spec or self.phase_spec
+        new_provs: List[FeatureProvider] = []
+        for p in self.providers:
+            if hasattr(p, "to_phase_model"):
+                new_provs.append(p.to_phase_model(model, spec, policy))
+            else:
+                new_provs.append(p)
+        return DeviceState(phase_model=model, phase_spec=spec, providers=new_provs)
+
+
+    def as_vector(self) -> np.ndarray:
+        """Convert device state to flat numeric vector.
+
+        Uses the provider-based architecture to construct the state vector.
+
+        Returns:
+            Float32 numpy array containing the state representation
+        """
+        return self.vector()
+
+    def __getattr__(self, name: str):
+        """Compatibility layer: access provider attributes directly.
+
+        This allows backward compatibility with code that accesses state.P, state.Q, etc.
+        """
+        # Avoid recursion on internal attributes
+        if name in ('phase_model', 'phase_spec', 'providers'):
+            raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
+        # Alias mappings for backward compatibility
+        alias_map = {
+            'P': 'P_MW',
+            'Q': 'Q_MVAr',
+        }
+        lookup_name = alias_map.get(name, name)
+
+        # Search providers for the attribute
+        providers_list = object.__getattribute__(self, 'providers')
+        for provider in providers_list:
+            if hasattr(provider, lookup_name):
+                return getattr(provider, lookup_name)
+
+        # Default values for commonly accessed attributes that may not exist
+        defaults = {
+            'on': 1.0,  # Devices without UC are always "on"
+        }
+        if name in defaults:
+            return defaults[name]
+
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
+    def __setattr__(self, name: str, value):
+        """Compatibility layer: set provider attributes directly."""
+        # Handle dataclass fields normally
+        if name in ('phase_model', 'phase_spec', 'providers'):
+            object.__setattr__(self, name, value)
+            return
+
+        # Alias mappings for backward compatibility
+        alias_map = {
+            'P': 'P_MW',
+            'Q': 'Q_MVAr',
+        }
+        lookup_name = alias_map.get(name, name)
+
+        # Try to set on existing providers
+        if hasattr(self, 'providers'):
+            for provider in self.providers:
+                if hasattr(provider, lookup_name):
+                    setattr(provider, lookup_name, value)
+                    return
+
+        # If no provider has this attribute, set it as a normal attribute
+        object.__setattr__(self, name, value)

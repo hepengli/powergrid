@@ -1,11 +1,53 @@
-from builtins import float
+from builtins import float as builtin_float
 import numpy as np
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
+from dataclasses import dataclass
 
 from powergrid.core.policies import Policy
-
+from powergrid.core.typing import Array, FeatureProvider
+from powergrid.core.state import PhaseModel, PhaseSpec
+from powergrid.core.registry import provider
 from ..agents.device_agent import DeviceAgent
 from ..core.protocols import NoProtocol, Protocol
+
+
+# Create provider for step-based discrete state
+@provider()
+@dataclass(slots=True)
+class StepState(FeatureProvider):
+    """Provider for discrete step state (e.g., shunt capacitor banks)."""
+    max_step: int = 0
+    step: Optional[Array] = None  # One-hot encoded current step
+
+    def vector(self) -> Array:
+        if self.step is not None:
+            return self.step.astype(np.float32, copy=False)
+        return np.zeros(self.max_step + 1, dtype=np.float32)
+
+    def names(self) -> List[str]:
+        return [f"step_{i}" for i in range(self.max_step + 1)]
+
+    def clamp_(self) -> None:
+        if self.step is not None:
+            # Ensure one-hot encoding
+            self.step = self.step.astype(np.float32)
+
+    def to_dict(self) -> dict:
+        return {
+            "max_step": self.max_step,
+            "step": None if self.step is None else self.step.tolist(),
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "StepState":
+        step_data = d.get("step")
+        return cls(
+            max_step=d.get("max_step", 0),
+            step=None if step_data is None else np.array(step_data, dtype=np.float32),
+        )
+
+    def to_phase_model(self, model: PhaseModel, spec: PhaseSpec, policy=None) -> "StepState":
+        return self
 
 class Shunt(DeviceAgent):
     """Switched shunt (capacitor/reactor bank) — **controllable**, not passive.
@@ -29,9 +71,9 @@ class Shunt(DeviceAgent):
         self.type = "SCB"
         self.name = name
         self.bus = bus
-        self.q_mvar = float(q_mvar)
+        self.q_mvar = builtin_float(q_mvar)
         self.max_step = int(max_step)
-        self.switching_cost = float(switching_cost)
+        self.switching_cost = builtin_float(switching_cost)
         self._last_step = 0
         
         super().__init__(
@@ -49,27 +91,39 @@ class Shunt(DeviceAgent):
         self.action.sample()
 
     def set_device_state(self):
-         # state one-hot
-        self.state.max_step = self.max_step
-        self.state.step = np.zeros(self.max_step + 1, dtype=np.float32)
+        # Create step state provider
+        step_state = StepState(
+            max_step=self.max_step,
+            step=np.zeros(self.max_step + 1, dtype=np.float32),
+        )
+        self.state.providers = [step_state]
 
     def update_state(self) -> None:
+        step_state = self._get_step_state()
         step = int(self.action.d[0]) if self.action.d.size else 0
-        self.state.step = np.zeros(self.max_step + 1, dtype=np.float32)
-        self.state.step[step] = 1.0
+        step_state.step = np.zeros(self.max_step + 1, dtype=np.float32)
+        step_state.step[step] = 1.0
         self._current_step = step  # for cost calculation
 
     def update_cost_safety(self) -> None:
         changed = int(getattr(self, "_current_step", 0) != getattr(self, "_last_step", 0))
-        self.cost = float(self.switching_cost * changed)
+        self.cost = builtin_float(self.switching_cost * changed)
         self.safety = 0.0
         self._last_step = getattr(self, "_current_step", self._last_step)
 
     def reset_device(self, rnd=None) -> None:
-        self.state.step = np.zeros(self.max_step + 1, dtype=np.float32)
+        step_state = self._get_step_state()
+        step_state.step = np.zeros(self.max_step + 1, dtype=np.float32)
         self._last_step = 0
         self.cost = 0.0
         self.safety = 0.0
+
+    def _get_step_state(self) -> StepState:
+        """Get the StepState provider from state."""
+        for provider in self.state.providers:
+            if isinstance(provider, StepState):
+                return provider
+        raise ValueError("StepState provider not found in state")
 
     def __repr__(self) -> str:
         return f"Shunt(name={self.name}, bus={self.bus}, q_mvar={self.q_mvar}, max_step={self.max_step})"
