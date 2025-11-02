@@ -213,7 +213,7 @@ class DG(DeviceAgent):
         """Initialize generator state including UC fields if enabled."""
         # Create electrical provider
         electrical_block = ElectricalBasePh()
-        providers = [electrical_block]
+        features = [electrical_block]
 
         # Add generator limits and UC if needed
         if self.startup_time is not None:
@@ -224,9 +224,9 @@ class DG(DeviceAgent):
                 Qmin=self.min_q_mvar,
             )
             uc_state = UnitCommitment(on=1.0, starting=0.0, shutting=0.0)
-            providers.extend([gen_limits, uc_state])
+            features.extend([gen_limits, uc_state])
 
-        self.state.providers = providers
+        self.state.features = features
 
     def set_action_space(self) -> None:
         """Define action space for P, Q control and optional UC."""
@@ -335,7 +335,7 @@ class DG(DeviceAgent):
     @property
     def electrical_block(self) -> ElectricalBasePh:
         """Get the ElectricalBasePh provider from state."""
-        for provider in self.state.providers:
+        for provider in self.state.features:
             if isinstance(provider, ElectricalBasePh):
                 return provider
         raise ValueError("ElectricalBasePh provider not found in state")
@@ -343,7 +343,7 @@ class DG(DeviceAgent):
     @property
     def uc_state(self) -> UnitCommitment:
         """Get the UnitCommitment provider from state."""
-        for provider in self.state.providers:
+        for provider in self.state.features:
             if isinstance(provider, UnitCommitment):
                 return provider
         raise ValueError("UnitCommitment provider not found in state")
@@ -351,7 +351,7 @@ class DG(DeviceAgent):
     @property
     def generator_limits(self) -> GeneratorLimits:
         """Get the GeneratorLimits provider from state."""
-        for provider in self.state.providers:
+        for provider in self.state.features:
             if isinstance(provider, GeneratorLimits):
                 return provider
         raise ValueError("GeneratorLimits provider not found in state")
@@ -461,7 +461,7 @@ class RES(DeviceAgent):
             Pmin=self.min_p_mw,
         )
 
-        self.state.providers = [electrical_block, gen_limits]
+        self.state.features = [electrical_block, gen_limits]
 
     # State update methods
     def update_state(self, *, scaling: Optional[float] = None) -> None:
@@ -507,7 +507,7 @@ class RES(DeviceAgent):
     @property
     def electrical_block(self) -> ElectricalBasePh:
         """Get the ElectricalBasePh provider from state."""
-        for provider in self.state.providers:
+        for provider in self.state.features:
             if isinstance(provider, ElectricalBasePh):
                 return provider
         raise ValueError("ElectricalBasePh provider not found in state")

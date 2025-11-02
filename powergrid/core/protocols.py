@@ -7,10 +7,7 @@ This module defines vertical and horizontal coordination protocols:
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
-from builtins import float
 
-from typing import Dict, Any, Optional, List, Tuple
-from ..agents.base import Agent, Observation, AgentID
 import numpy as np
 
 from powergrid.agents.base import Agent, AgentID, Observation, Message

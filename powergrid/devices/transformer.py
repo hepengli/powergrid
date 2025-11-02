@@ -1,5 +1,4 @@
 from typing import Any, Optional, Dict
-from builtins import float
 
 from powergrid.agents.device_agent import DeviceAgent
 from powergrid.core.protocols import NoProtocol, Protocol

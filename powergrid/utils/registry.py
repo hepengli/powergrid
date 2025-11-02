@@ -17,7 +17,7 @@ class ProviderRegistry:
         return dict(cls._types)
 
 def provider(name: Optional[str] = None):
-    """Decorator to auto-register providers."""
+    """Decorator to auto-register provider."""
     def deco(typ):
         ProviderRegistry.register(typ, name)
         return typ

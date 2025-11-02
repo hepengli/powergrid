@@ -1,6 +1,7 @@
-import numpy as np
-from typing import Any, Dict, Optional, List
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
+import numpy as np
 
 from powergrid.core.policies import Policy
 from powergrid.utils.typing import Array
@@ -95,7 +96,7 @@ class Shunt(DeviceAgent):
             max_step=self.max_step,
             step=np.zeros(self.max_step + 1, dtype=np.float32),
         )
-        self.state.providers = [step_state]
+        self.state.features = [step_state]
 
     def update_state(self) -> None:
         step_state = self._get_step_state()
@@ -119,7 +120,7 @@ class Shunt(DeviceAgent):
 
     def _get_step_state(self) -> StepState:
         """Get the StepState provider from state."""
-        for provider in self.state.providers:
+        for provider in self.state.features:
             if isinstance(provider, StepState):
                 return provider
         raise ValueError("StepState provider not found in state")

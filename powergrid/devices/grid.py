@@ -1,4 +1,3 @@
-from builtins import float
 from typing import Any, Dict, Optional
 
 from powergrid.agents.device_agent import DeviceAgent
