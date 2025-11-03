@@ -28,7 +28,10 @@ class Grid(DeviceAgent):
         self.sn_mva = float(sn_mva)
         self.sell_discount = float(sell_discount)
         self.dt = float(dt)
-        self.action_callback = True
+        
+        # Pass action_callback in device_config so parent can see it
+        device_config = {**device_config, 'action_callback': True}
+        
         super().__init__(
             agent_id=name,
             policy=policy,

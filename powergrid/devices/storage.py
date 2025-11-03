@@ -5,8 +5,8 @@ from builtins import float
 from ..agents.device_agent import DeviceAgent
 from ..core.protocols import NoProtocol, Protocol
 from ..core.policies import Policy
-from ..core.providers.storage import StorageBlock
-from ..core.providers.electrical import ElectricalBasePh
+from ..core.features.storage import StorageBlock
+from ..core.features.electrical import ElectricalBasePh
 from ..utils.cost import cost_from_curve
 from ..utils.safety import s_over_rating, soc_bounds_penalty
 

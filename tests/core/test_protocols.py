@@ -249,7 +249,7 @@ class TestSetpointProtocol:
 
     def test_setpoint_protocol_coordinate_action_with_array(self):
         """Test SetpointProtocol coordinate_action with numpy array action."""
-        from powergrid.core.actions import Action
+        from powergrid.core.action import Action
 
         protocol = SetpointProtocol()
 
@@ -305,7 +305,7 @@ class TestSetpointProtocol:
 
     def test_setpoint_protocol_coordinate_message_with_array(self):
         """Test SetpointProtocol coordinate_message with numpy array."""
-        from powergrid.core.actions import Action
+        from powergrid.core.action import Action
 
         protocol = SetpointProtocol()
 

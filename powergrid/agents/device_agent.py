@@ -11,7 +11,7 @@ import numpy as np
 from gymnasium.spaces import Box, Discrete, MultiDiscrete
 
 from powergrid.agents.base import Agent, Observation
-from powergrid.core.actions import Action
+from powergrid.core.action import Action
 from powergrid.core.policies import Policy
 from powergrid.core.protocols import NoProtocol, Protocol
 from powergrid.core.state import DeviceState
@@ -48,7 +48,7 @@ class DeviceAgent(Agent):
         """
         self.state = DeviceState()
         self.action = Action()
-        self.action_callback = False  # True if external logic sets state
+        self.action_callback = device_config.get('action_callback', False)  # True if external logic sets state
         self.cost = 0.0
         self.safety = 0.0
         self.adversarial = False
@@ -94,6 +94,10 @@ class DeviceAgent(Agent):
         Raises:
             ValueError: If action configuration is invalid
         """
+        # Devices with action_callback don't have actions (controlled externally)
+        if self.action_callback:
+            return Discrete(1)  # Dummy action space
+        
         action = self.action
 
         # Continuous actions
