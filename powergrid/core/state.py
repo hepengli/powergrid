@@ -114,6 +114,11 @@ class DeviceState:
     phase_model: PhaseModel = PhaseModel.BALANCED_1PH
     phase_spec: PhaseSpec = field(default_factory=PhaseSpec)
     providers: List[FeatureProvider] = field(default_factory=list)
+    prefix_names: bool = False
+
+    def _iter_ready_features(self) -> Iterable[FeatureProvider]:
+        for f in self.providers:
+            yield f
 
     def vector(self) -> Array:
         vecs: List[np.ndarray] = []
@@ -196,8 +201,7 @@ class DeviceState:
                 raise ValueError(
                     f"Unknown feature kind '{kind}'. Provide a registry mapping."
                 )
-            if hasattr(cls_, "
-                       "):
+            if hasattr(cls_, "from_dict"):
                 feats.append(cls_.from_dict(payload))  # type: ignore
             else:
                 feats.append(cls_(**payload))          # type: ignore

@@ -7,7 +7,7 @@ from gymnasium.spaces import Box, Discrete, MultiDiscrete
 
 from powergrid.agents.device_agent import DeviceAgent
 from powergrid.agents.base import Observation
-from powergrid.core.actions import Action
+from powergrid.core.action import Action
 from powergrid.core.state import DeviceState
 from powergrid.core.policies import Policy
 from powergrid.core.protocols import NoProtocol

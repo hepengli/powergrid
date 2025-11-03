@@ -35,20 +35,25 @@ class Transformer(DeviceAgent):
         self.tap_min = tap_min
         self.dt = float(dt)
         self.tap_change_cost = float(tap_change_cost)
-        self._last_tap_position = self.state.tap_position
-
+        
         super().__init__(
             agent_id=name,
             policy=policy,
             protocol=protocol,
             device_config=device_config,
         )
+        
+        # Initialize after state is created
+        self._last_tap_position = self.state.tap_position
 
     def set_action_space(self) -> None:
         if self.tap_max is not None and self.tap_min is not None:
             self.action.ncats = self.tap_max - self.tap_min + 1
             self.action.dim_d = 1
             self.action.sample()
+        else:
+            # No tap control - passive transformer
+            self.action_callback = True
 
     def set_device_state(self) -> None:
         self.state.loading_percentage = 0.0

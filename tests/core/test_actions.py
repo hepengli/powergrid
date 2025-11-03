@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from powergrid.core.actions import Action
+from powergrid.core.action import Action
 
 
 class TestAction:

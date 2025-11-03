@@ -13,7 +13,7 @@ import numpy as np
 from powergrid.agents.device_agent import DeviceAgent
 from powergrid.core.policies import Policy
 from powergrid.core.protocols import NoProtocol, Protocol
-from powergrid.core.providers.electrical import ElectricalBasePh
+from powergrid.core.features.electrical import ElectricalBasePh
 from powergrid.core.typing import Array, FeatureProvider
 from powergrid.core.state import PhaseModel, PhaseSpec
 from powergrid.core.registry import provider
