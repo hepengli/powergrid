@@ -1,14 +1,14 @@
-from typing import Any, Optional, Dict
-import numpy as np
-from builtins import float
+from typing import Any, Dict, Optional
 
-from ..agents.device_agent import DeviceAgent
-from ..core.protocols import NoProtocol, Protocol
-from ..core.policies import Policy
-from ..core.providers.storage import StorageBlock
-from ..core.providers.electrical import ElectricalBasePh
-from ..utils.cost import cost_from_curve
-from ..utils.safety import s_over_rating, soc_bounds_penalty
+import numpy as np
+
+from powergrid.agents.device_agent import DeviceAgent
+from powergrid.core.policies import Policy
+from powergrid.core.protocols import NoProtocol, Protocol
+from powergrid.devices.features.electrical import ElectricalBasePh
+from powergrid.devices.features.storage import StorageBlock
+from powergrid.utils.cost import cost_from_curve
+from powergrid.utils.safety import s_over_rating, soc_bounds_penalty
 
 
 class ESS(DeviceAgent):
@@ -68,8 +68,8 @@ class ESS(DeviceAgent):
             device_config=device_config,
         )
 
-    def set_device_state(self):
-        # Initialize state with StorageBlock and ElectricalBasePh providers
+    def set_device_state(self, config: Dict[str, Any]) -> None:
+        # Initialize state with StorageBlock and ElectricalBasePh features
         storage_block = StorageBlock(
             soc=self.init_soc,
             soc_min=self.min_soc,
@@ -84,7 +84,7 @@ class ESS(DeviceAgent):
             P_MW=0.0,
             Q_MVAr=0.0 if not np.isnan(self.max_q_mvar) else None,
         )
-        self.state.providers = [storage_block, electrical_block]
+        self.state.features = [storage_block, electrical_block]
 
     def set_action_space(self) -> None:
         if not np.isnan(self.sn_mva) or not np.isnan(self.max_q_mvar):
@@ -97,9 +97,9 @@ class ESS(DeviceAgent):
         self.action.sample()
 
     def update_state(self) -> None:
-        # Get providers
-        storage_block = self._get_storage_block()
-        electrical_block = self._get_electrical_block()
+        # Get features
+        storage_block = self.storage_block
+        electrical_block = self.electrical_block
 
         # Update P and Q from action
         if self.action.c.size > 1:
@@ -117,9 +117,9 @@ class ESS(DeviceAgent):
             storage_block.soc += P / self.dsc_eff * self.dt / self.capacity
 
     def update_cost_safety(self) -> None:
-        # Get providers
-        storage_block = self._get_storage_block()
-        electrical_block = self._get_electrical_block()
+        # Get features
+        storage_block = self.storage_block
+        electrical_block = self.electrical_block
 
         P = float(electrical_block.P_MW or 0.0)
         cost = cost_from_curve(P, self.cost_curve_coefs)
@@ -137,7 +137,7 @@ class ESS(DeviceAgent):
 
     def feasible_action(self) -> None:
         # Get storage provider
-        storage_block = self._get_storage_block()
+        storage_block = self.storage_block
 
         # compute instantaneous feasible P based on available energy windows
         max_dsc_power = (storage_block.soc - self.min_soc) * self.capacity * self.dsc_eff / self.dt
@@ -155,9 +155,9 @@ class ESS(DeviceAgent):
     def reset_device(self, *, rnd=None, init_soc: Optional[float] = None) -> None:
         rnd = np.random if rnd is None else rnd
 
-        # Get providers
-        storage_block = self._get_storage_block()
-        electrical_block = self._get_electrical_block()
+        # Get features
+        storage_block = self.storage_block
+        electrical_block = self.electrical_block
 
         # Reset SOC
         storage_block.soc = float(init_soc) if init_soc is not None else float(
@@ -172,16 +172,18 @@ class ESS(DeviceAgent):
         self.cost = 0.0
         self.safety = 0.0
 
-    def _get_storage_block(self) -> StorageBlock:
+    @property
+    def storage_block(self) -> StorageBlock:
         """Get the StorageBlock provider from state."""
-        for provider in self.state.providers:
+        for provider in self.state.features:
             if isinstance(provider, StorageBlock):
                 return provider
         raise ValueError("StorageBlock provider not found in state")
 
-    def _get_electrical_block(self) -> ElectricalBasePh:
+    @property
+    def electrical_block(self) -> ElectricalBasePh:
         """Get the ElectricalBasePh provider from state."""
-        for provider in self.state.providers:
+        for provider in self.state.features:
             if isinstance(provider, ElectricalBasePh):
                 return provider
         raise ValueError("ElectricalBasePh provider not found in state")
@@ -192,4 +194,4 @@ class ESS(DeviceAgent):
         Returns:
             String representation
         """
-        return f"ESS(name={self.name}, bus={self.bus}, capacity={self.capacity}MWh, P=[{self.min_p_mw}, {self.max_p_mw}]MW)"
+        return f"ESS(name={self.name}, bus={self.bus}, capacity={self.capacity}MWh, device_states=[{self.storage_block}, {self.electrical_block}])"

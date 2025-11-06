@@ -7,10 +7,7 @@ This module defines vertical and horizontal coordination protocols:
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
-from builtins import float
 
-from typing import Dict, Any, Optional, List, Tuple
-from ..agents.base import Agent, Observation, AgentID
 import numpy as np
 
 from powergrid.agents.base import Agent, AgentID, Observation, Message
@@ -26,6 +23,64 @@ class Protocol(ABC):
             True if this protocol performs no coordination (NoProtocol or NoHorizontalProtocol)
         """
         return False
+    
+    def sync_global_state(
+        self,
+        agents: Dict[AgentID, Agent],
+        net: Any,
+        t: float
+    ) -> None:
+        """Sync global state to all agents (default: no-op).
+
+        This method can be overridden by protocols that need to sync global
+        information to agents at each timestep.
+
+        Args:
+            agents: Dictionary of all agents
+            net: Global network/state object
+            t: Current simulation time
+        """
+        pass
+
+    def coordinate_messages(
+        self,
+        agents: Dict[AgentID, Agent],
+        observations: Dict[AgentID, Observation],
+        net: Any,
+        t: float
+    ) -> None:
+        """Coordinate messages between agents (default: no-op).
+
+        This method can be overridden by protocols that need to send messages
+        between agents at each timestep.
+
+        Args:
+            agents: Dictionary of all agents
+            observations: Observations from all agents
+            net: Global network/state object
+            t: Current simulation time
+        """
+        pass
+
+    def coordinate_actions(
+        self,
+        agents: Dict[AgentID, Agent],
+        actions: Dict[AgentID, Any],
+        net: Any,
+        t: float
+    ) -> None:
+        """Coordinate actions between agents (default: no-op).
+
+        This method can be overridden by protocols that need to coordinate
+        actions between agents at each timestep.
+
+        Args:
+            agents: Dictionary of all agents
+            actions: Actions computed by all agents
+            net: Global network/state object
+            t: Current simulation time
+        """
+        pass
 
 
 # =============================================================================

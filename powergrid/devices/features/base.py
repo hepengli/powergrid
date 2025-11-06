@@ -1,7 +1,7 @@
-from typing import Protocol, List, Dict, Optional
-import numpy as np
+from typing import Dict, List, Protocol
 
-Array = np.ndarray
+from powergrid.utils.typing import Array
+
 
 class FeatureProvider(Protocol):
     def vector(self) -> Array: ...

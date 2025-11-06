@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 # NOTE: use the canonical import path for these types
-from powergrid.core.utils.phase import PhaseModel, PhaseSpec
+from powergrid.utils.phase import PhaseModel, PhaseSpec
 
 
 def test_default_is_three_phase_with_neutral_and_bond():

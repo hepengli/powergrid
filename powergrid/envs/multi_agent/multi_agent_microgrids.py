@@ -5,9 +5,9 @@ This is a modernized version of the legacy MultiAgentMicrogrids that uses
 PowerGridAgent instead of GridEnv while maintaining identical logic.
 """
 
+from typing import List
 
 import pandapower as pp
-from typing import List
 
 from powergrid.agents.grid_agent import PowerGridAgent
 from powergrid.data.data_loader import load_dataset
@@ -85,7 +85,7 @@ class MultiAgentMicrogrids(NetworkedGridEnv):
         )
         self.dso.add_dataset(self._read_data(load_area, renew_area))
         self.dataset_size = self.dso.dataset['price'].size
-        self.total_days = self.dataset_size // self.max_episode_steps
+        self._total_days = self.dataset_size // self.max_episode_steps
 
         return net
 
@@ -189,7 +189,7 @@ if __name__ == '__main__':
         print(f"  - Agent names: {list(env.agent_dict.keys())}")
         print(f"  - Actionable agents: {list(env.actionable_agents.keys())}")
         print(f"  - Dataset size: {env.dataset_size}")
-        print(f"  - Total days: {env.total_days}")
+        print(f"  - Total days: {env._total_days}")
 
         print("\nResetting environment...")
         obs, info = env.reset(seed=42)

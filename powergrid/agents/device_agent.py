@@ -11,7 +11,7 @@ import numpy as np
 from gymnasium.spaces import Box, Discrete, MultiDiscrete
 
 from powergrid.agents.base import Agent, Observation
-from powergrid.core.actions import Action
+from powergrid.core.action import Action
 from powergrid.core.policies import Policy
 from powergrid.core.protocols import NoProtocol, Protocol
 from powergrid.core.state import DeviceState
@@ -46,18 +46,18 @@ class DeviceAgent(Agent):
             policy: Decision policy (defaults to random)
             agent_id: Agent ID (defaults to device.name)
         """
-        self.state = DeviceState()
-        self.action = Action()
-        self.action_callback = False  # True if external logic sets state
-        self.cost = 0.0
-        self.safety = 0.0
-        self.adversarial = False
-        self.config = device_config
-        self.policy = policy
-        self.protocol = protocol
+        self.state: DeviceState = DeviceState()
+        self.action: Action = Action()
+        self.action_callback: bool = False  # True if external logic sets state
+        self.cost: float = 0.0
+        self.safety: float = 0.0
+        self.adversarial: bool = False
+        self.config: Dict[str, Any] = device_config
+        self.policy: Optional[Policy] = policy
+        self.protocol: Protocol = protocol
 
         self.set_action_space()
-        self.set_device_state()
+        self.set_device_state(device_config['device_state_config'])
 
         assert agent_id or "name" in device_config, "DeviceAgent requires agent_id or device_config['name']"
         agent_id = agent_id or device_config["name"]
@@ -77,7 +77,7 @@ class DeviceAgent(Agent):
         """
         pass
 
-    def set_device_state(self) -> None:
+    def set_device_state(self, config: Dict[str, Any]) -> None:
         """Initialize device-specific state attributes.
 
         This method can be overridden by subclasses to initialize device-specific state.
@@ -131,7 +131,7 @@ class DeviceAgent(Agent):
         return Box(
             low=-np.inf,
             high=np.inf,
-            shape=self.state.as_vector().shape,
+            shape=self.state.vector().shape,
             dtype=np.float32
         )
 
@@ -163,7 +163,7 @@ class DeviceAgent(Agent):
         )
 
         # Local device state only
-        obs.local['state'] = self.state.as_vector().astype(np.float32)
+        obs.local['state'] = self.state.vector().astype(np.float32)
 
         # TODO: aggregate global info if needed
         obs.global_info = global_state

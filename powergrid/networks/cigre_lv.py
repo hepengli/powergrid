@@ -1,6 +1,7 @@
+import pandapower as pp
 from numpy import nan
 from pandas import read_json
-import pandapower as pp
+
 
 def CIGRE_LV():
     """

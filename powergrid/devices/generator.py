@@ -4,21 +4,21 @@ This module provides distributed generator (DG) and renewable energy source (RES
 implementations that extend DeviceAgent with power generation capabilities.
 """
 
-from typing import Any, Dict, Optional, Sequence
-from dataclasses import dataclass, field
-from builtins import float as builtin_float
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Sequence, Union
 
 import numpy as np
 
 from powergrid.agents.device_agent import DeviceAgent
 from powergrid.core.policies import Policy
 from powergrid.core.protocols import NoProtocol, Protocol
-from powergrid.core.providers.electrical import ElectricalBasePh
-from powergrid.core.typing import Array, FeatureProvider
 from powergrid.core.state import PhaseModel, PhaseSpec
-from powergrid.core.registry import provider
+from powergrid.devices.features.base import FeatureProvider
+from powergrid.devices.features.electrical import ElectricalBasePh
 from powergrid.utils.cost import cost_from_curve
+from powergrid.utils.registry import provider
 from powergrid.utils.safety import pf_penalty, s_over_rating
+from powergrid.utils.typing import Array
 
 
 # Create provider for generator limits
@@ -26,16 +26,16 @@ from powergrid.utils.safety import pf_penalty, s_over_rating
 @dataclass(slots=True)
 class GeneratorLimits(FeatureProvider):
     """Provider for generator power limits and constraints."""
-    Pmax: Optional[builtin_float] = None
-    Pmin: Optional[builtin_float] = None
-    Qmax: Optional[builtin_float] = None
-    Qmin: Optional[builtin_float] = None
+    Pmax: Optional[float] = None
+    Pmin: Optional[float] = None
+    Qmax: Optional[float] = None
+    Qmin: Optional[float] = None
 
     def vector(self) -> Array:
         parts = []
         for v in (self.Pmax, self.Pmin, self.Qmax, self.Qmin):
             if v is not None:
-                parts.append(np.array([builtin_float(v)], np.float32))
+                parts.append(np.array([float(v)], np.float32))
         return np.concatenate(parts, dtype=np.float32) if parts else np.zeros(0, np.float32)
 
     def names(self) -> list[str]:
@@ -67,6 +67,9 @@ class GeneratorLimits(FeatureProvider):
 
     def to_phase_model(self, model: PhaseModel, spec: PhaseSpec, policy=None) -> "GeneratorLimits":
         return self
+    
+    def __repr__(self) -> str:
+        return f"GeneratorLimits(Pmin={self.Pmin}, Pmax={self.Pmax}, Qmin={self.Qmin}, Qmax={self.Qmax})"
 
 
 # Create provider for unit commitment state
@@ -74,9 +77,9 @@ class GeneratorLimits(FeatureProvider):
 @dataclass(slots=True)
 class UnitCommitment(FeatureProvider):
     """Provider for unit commitment state."""
-    on: builtin_float = 1.0  # 0 or 1
-    starting: builtin_float = 0.0  # timesteps in startup sequence
-    shutting: builtin_float = 0.0  # timesteps in shutdown sequence
+    on: float = 1.0  # 0 or 1
+    starting: float = 0.0  # timesteps in startup sequence
+    shutting: float = 0.0  # timesteps in shutdown sequence
 
     def vector(self) -> Array:
         return np.array([self.on, self.starting, self.shutting], dtype=np.float32)
@@ -85,9 +88,9 @@ class UnitCommitment(FeatureProvider):
         return ["on", "starting", "shutting"]
 
     def clamp_(self) -> None:
-        self.on = builtin_float(np.clip(self.on, 0.0, 1.0))
-        self.starting = builtin_float(max(0.0, self.starting))
-        self.shutting = builtin_float(max(0.0, self.shutting))
+        self.on = float(np.clip(self.on, 0.0, 1.0))
+        self.starting = float(max(0.0, self.starting))
+        self.shutting = float(max(0.0, self.shutting))
 
     def to_dict(self) -> dict:
         return {"on": self.on, "starting": self.starting, "shutting": self.shutting}
@@ -98,6 +101,9 @@ class UnitCommitment(FeatureProvider):
 
     def to_phase_model(self, model: PhaseModel, spec: PhaseSpec, policy=None) -> "UnitCommitment":
         return self
+
+    def __repr__(self) -> str:
+        return f"UnitCommitment(on={self.on}, starting={self.starting}, shutting={self.shutting})"
 
 
 class DG(DeviceAgent):
@@ -203,15 +209,11 @@ class DG(DeviceAgent):
         )
 
     # Initialization methods
-    def set_device_state(self):
+    def set_device_state(self, config: Dict[str, Any]) -> None:
         """Initialize generator state including UC fields if enabled."""
         # Create electrical provider
-        electrical_block = ElectricalBasePh(
-            P_MW=0.0,
-            Q_MVAr=0.0 if not np.isnan(self.max_q_mvar) else None,
-        )
-
-        providers = [electrical_block]
+        electrical_block = ElectricalBasePh()
+        features = [electrical_block]
 
         # Add generator limits and UC if needed
         if self.startup_time is not None:
@@ -222,9 +224,9 @@ class DG(DeviceAgent):
                 Qmin=self.min_q_mvar,
             )
             uc_state = UnitCommitment(on=1.0, starting=0.0, shutting=0.0)
-            providers.extend([gen_limits, uc_state])
+            features.extend([gen_limits, uc_state])
 
-        self.state.providers = providers
+        self.state.features = features
 
     def set_action_space(self) -> None:
         """Define action space for P, Q control and optional UC."""
@@ -248,7 +250,7 @@ class DG(DeviceAgent):
     # State update methods
     def update_state(self) -> None:
         """Update generator state from actions."""
-        electrical_block = self._get_electrical_block()
+        electrical_block = self.electrical_block
 
         # UC progression
         if self.startup_time is not None and self.action.dim_d > 0:
@@ -262,7 +264,7 @@ class DG(DeviceAgent):
 
     def _update_uc_state(self) -> None:
         """Update unit commitment state machine."""
-        uc_state = self._get_uc_state()
+        uc_state = self.uc_state
 
         assert not (uc_state.shutting and uc_state.starting)
         if not (uc_state.shutting or uc_state.starting):
@@ -286,14 +288,14 @@ class DG(DeviceAgent):
 
     def update_cost_safety(self) -> None:
         """Calculate cost and safety penalties."""
-        electrical_block = self._get_electrical_block()
-        P = builtin_float(electrical_block.P_MW or 0.0)
+        electrical_block = self.electrical_block
+        P = float(electrical_block.P_MW or 0.0)
         cost = cost_from_curve(P, self.cost_curve_coefs)
 
         # Get 'on' state from UC if available, otherwise assume on
         on_state = 1.0
         if self.startup_time is not None:
-            uc_state = self._get_uc_state()
+            uc_state = self.uc_state
             on_state = uc_state.on
 
         self.cost = (on_state * cost * self.dt) + getattr(self, "uc_cost", 0.0) * self.dt
@@ -301,7 +303,7 @@ class DG(DeviceAgent):
         # Safety penalties
         safety = 0.0
         if self.action.dim_c > 1:
-            Q = builtin_float(electrical_block.Q_MVAr or 0.0)
+            Q = float(electrical_block.Q_MVAr or 0.0)
             safety += s_over_rating(P, Q, self.sn_mva)
             safety += pf_penalty(P, Q, self.min_pf)
 
@@ -313,7 +315,7 @@ class DG(DeviceAgent):
         Args:
             rnd: Random number generator (unused)
         """
-        electrical_block = self._get_electrical_block()
+        electrical_block = self.electrical_block
 
         # Reset P/Q
         electrical_block.P_MW = 0.0
@@ -322,7 +324,7 @@ class DG(DeviceAgent):
 
         # UC fields
         if self.startup_time is not None:
-            uc_state = self._get_uc_state()
+            uc_state = self.uc_state
             uc_state.shutting = 0.0
             uc_state.starting = 0.0
             uc_state.on = 1.0
@@ -330,19 +332,29 @@ class DG(DeviceAgent):
         self.cost = 0.0
         self.safety = 0.0
 
-    def _get_electrical_block(self) -> ElectricalBasePh:
+    @property
+    def electrical_block(self) -> ElectricalBasePh:
         """Get the ElectricalBasePh provider from state."""
-        for provider in self.state.providers:
+        for provider in self.state.features:
             if isinstance(provider, ElectricalBasePh):
                 return provider
         raise ValueError("ElectricalBasePh provider not found in state")
 
-    def _get_uc_state(self) -> UnitCommitment:
+    @property
+    def uc_state(self) -> UnitCommitment:
         """Get the UnitCommitment provider from state."""
-        for provider in self.state.providers:
+        for provider in self.state.features:
             if isinstance(provider, UnitCommitment):
                 return provider
         raise ValueError("UnitCommitment provider not found in state")
+    
+    @property
+    def generator_limits(self) -> GeneratorLimits:
+        """Get the GeneratorLimits provider from state."""
+        for provider in self.state.features:
+            if isinstance(provider, GeneratorLimits):
+                return provider
+        raise ValueError("GeneratorLimits provider not found in state")
 
     def __repr__(self) -> str:
         """Return string representation of the DG.
@@ -350,9 +362,9 @@ class DG(DeviceAgent):
         Returns:
             String representation
         """
-        return f"DG(name={self.name}, type={self.type}, bus={self.bus}, P=[{self.min_p_mw}, {self.max_p_mw}]MW)"
+        return f"DG(name={self.name}, type={self.type}, bus={self.bus}, device_states=[{self.uc_state}, {self.electrical_block}, {self.generator_limits}]MW)"
 
-
+    
 class RES(DeviceAgent):
     """Renewable Energy Source (solar/wind).
 
@@ -435,7 +447,7 @@ class RES(DeviceAgent):
             self.action.dim_d = 1
             self.action.sample()
 
-    def set_device_state(self) -> None:
+    def set_device_state(self, config: Dict[str, Any]) -> None:
         """Initialize RES state."""
         # Create electrical provider
         electrical_block = ElectricalBasePh(
@@ -449,31 +461,31 @@ class RES(DeviceAgent):
             Pmin=self.min_p_mw,
         )
 
-        self.state.providers = [electrical_block, gen_limits]
+        self.state.features = [electrical_block, gen_limits]
 
     # State update methods
-    def update_state(self, *, scaling: Optional[builtin_float] = None) -> None:
+    def update_state(self, *, scaling: Optional[float] = None) -> None:
         """Update RES state from scaling factor and Q action.
 
         Args:
             scaling: Solar irradiance or wind speed scaling factor (0-1)
         """
-        electrical_block = self._get_electrical_block()
+        electrical_block = self.electrical_block
 
         if scaling is not None:
             assert 0.0 <= scaling <= 1.0
-            electrical_block.P_MW = builtin_float(self.sn_mva * scaling)
+            electrical_block.P_MW = float(self.sn_mva * scaling)
         if self.action.c.size > 0:
-            electrical_block.Q_MVAr = builtin_float(self.action.c if np.isscalar(self.action.c) else self.action.c[0])
+            electrical_block.Q_MVAr = float(self.action.c if np.isscalar(self.action.c) else self.action.c[0])
 
     def update_cost_safety(self) -> None:
         """Calculate safety penalty for apparent power exceeding rating."""
-        electrical_block = self._get_electrical_block()
+        electrical_block = self.electrical_block
 
         if self.action.c.size > 0:
-            P = builtin_float(electrical_block.P_MW or 0.0)
-            Q = builtin_float(electrical_block.Q_MVAr or 0.0)
-            S = builtin_float(np.hypot(P, Q))
+            P = float(electrical_block.P_MW or 0.0)
+            Q = float(electrical_block.Q_MVAr or 0.0)
+            S = float(np.hypot(P, Q))
             self.safety = max(0.0, S - self.sn_mva) * self.dt
         else:
             self.safety = 0.0
@@ -484,7 +496,7 @@ class RES(DeviceAgent):
         Args:
             rnd: Random number generator (unused)
         """
-        electrical_block = self._get_electrical_block()
+        electrical_block = self.electrical_block
 
         electrical_block.P_MW = 0.0
         if self.action.c.size > 0:
@@ -492,9 +504,10 @@ class RES(DeviceAgent):
         self.cost = 0.0
         self.safety = 0.0
 
-    def _get_electrical_block(self) -> ElectricalBasePh:
+    @property
+    def electrical_block(self) -> ElectricalBasePh:
         """Get the ElectricalBasePh provider from state."""
-        for provider in self.state.providers:
+        for provider in self.state.features:
             if isinstance(provider, ElectricalBasePh):
                 return provider
         raise ValueError("ElectricalBasePh provider not found in state")
@@ -506,3 +519,6 @@ class RES(DeviceAgent):
             String representation
         """
         return f"RES(name={self.name}, type={self.type}, bus={self.bus}, sn_mva={self.sn_mva}MVA)"
+
+
+GENERATOR = Union[DG, RES]

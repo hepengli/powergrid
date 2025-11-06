@@ -1,14 +1,15 @@
-from builtins import float as builtin_float
-import numpy as np
-from typing import Any, Dict, Optional, List
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
+import numpy as np
 
 from powergrid.core.policies import Policy
-from powergrid.core.typing import Array, FeatureProvider
+from powergrid.utils.typing import Array
+from powergrid.devices.features.base import FeatureProvider
 from powergrid.core.state import PhaseModel, PhaseSpec
-from powergrid.core.registry import provider
-from ..agents.device_agent import DeviceAgent
-from ..core.protocols import NoProtocol, Protocol
+from powergrid.utils.registry import provider
+from powergrid.agents.device_agent import DeviceAgent
+from powergrid.core.protocols import NoProtocol, Protocol
 
 
 # Create provider for step-based discrete state
@@ -71,9 +72,9 @@ class Shunt(DeviceAgent):
         self.type = "SCB"
         self.name = name
         self.bus = bus
-        self.q_mvar = builtin_float(q_mvar)
+        self.q_mvar = float(q_mvar)
         self.max_step = int(max_step)
-        self.switching_cost = builtin_float(switching_cost)
+        self.switching_cost = float(switching_cost)
         self._last_step = 0
         
         super().__init__(
@@ -87,16 +88,15 @@ class Shunt(DeviceAgent):
         # discrete steps: 0..max_step
         self.action.ncats = self.max_step + 1
         self.action.dim_d = 1
-        
         self.action.sample()
 
-    def set_device_state(self):
+    def set_device_state(self, config: Dict[str, Any]) -> None:
         # Create step state provider
         step_state = StepState(
             max_step=self.max_step,
             step=np.zeros(self.max_step + 1, dtype=np.float32),
         )
-        self.state.providers = [step_state]
+        self.state.features = [step_state]
 
     def update_state(self) -> None:
         step_state = self._get_step_state()
@@ -107,7 +107,7 @@ class Shunt(DeviceAgent):
 
     def update_cost_safety(self) -> None:
         changed = int(getattr(self, "_current_step", 0) != getattr(self, "_last_step", 0))
-        self.cost = builtin_float(self.switching_cost * changed)
+        self.cost = float(self.switching_cost * changed)
         self.safety = 0.0
         self._last_step = getattr(self, "_current_step", self._last_step)
 
@@ -120,7 +120,7 @@ class Shunt(DeviceAgent):
 
     def _get_step_state(self) -> StepState:
         """Get the StepState provider from state."""
-        for provider in self.state.providers:
+        for provider in self.state.features:
             if isinstance(provider, StepState):
                 return provider
         raise ValueError("StepState provider not found in state")

@@ -1,11 +1,12 @@
-import os, pickle
+import os
+import pickle
+from collections import OrderedDict
+from os.path import abspath, dirname
+
 import numpy as np
 import pandapower as pp
 
-from os.path import dirname, abspath
-from collections import OrderedDict
-
-from powergrid.base_env import GridBaseEnv
+from deprecated.base_env import GridBaseEnv
 from powergrid.devices import *
 
 def read_data(train, load_area, renew_area, price_area):

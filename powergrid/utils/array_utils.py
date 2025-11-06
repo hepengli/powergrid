@@ -1,4 +1,5 @@
-from typing import List, Optional, Dict, Protocol, Sequence, Tuple
+from typing import Dict, List, Optional, Protocol, Sequence, Tuple
+
 import numpy as np
 
 Array = np.ndarray

@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 from powergrid.core.features import TapChangerPh
-from powergrid.core.utils.phase import PhaseModel, PhaseSpec
+from powergrid.utils.phase import PhaseModel, PhaseSpec
 
 
 def _assert_vec_names_consistent(b: TapChangerPh):
