@@ -1,203 +1,85 @@
-from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Type
-
+from dataclasses import dataclass, field
+from typing import Optional
 import numpy as np
 
-from powergrid.devices.features.base import FeatureProvider
-from powergrid.utils.phase import PhaseModel, PhaseSpec
-from powergrid.utils.registry import provider
-from powergrid.utils.typing import Array
+Array = np.ndarray
 
-
-KNOWN_FEATURES: Dict[str, Type[FeatureProvider]] = {}
-
-
-def _vec_names(feat: FeatureProvider) -> Tuple[np.ndarray, List[str]]:
-    v = np.asarray(feat.vector(), np.float32).ravel()
-    n = feat.names()
-    if len(n) != v.size:
-        raise ValueError(
-            f"{feat.__class__.__name__}: names ({len(n)}) != vector size ({v.size})."
-        )
-    return v, n
-
-
-@provider()
-@dataclass(slots=True)
+@dataclass
 class DeviceState:
+    """State of a device and helper to build a numeric state vector.
+
+    Only attributes that exist contribute to the vector, which allows different
+    devices to expose different state elements.
     """
-    DeviceState — phase-owning container that aggregates multiple feature
-    providers (StorageBlock, ElectricalBasePh, PhaseConnection, etc.) into a
-    single feature vector and name list.
 
-    Authoritative phase context:
-      • DeviceState validates its own (phase_model, phase_spec).
-      • It then overrides every child feature's phase_model/spec to match.
-      • After override, each feature is asked to re-validate under the final context:
-          - revalidate_after_context() if available (preferred)
-          - else _validate_inputs_() or _ensure_shapes/_ensure_shapes_() if present
-          - else defer errors to vector()/names()
+    P: float = 0.0
+    Q: float = 0.0
+    on: int = 1  # 0/1
 
-    No implicit conversions:
-      • We never call to_phase_model() on features.
-      • Users must decide BALANCED_1PH vs THREE_PHASE; DeviceState enforces that
-        choice across children.
+    # Optional attributes used by various devices
+    Pmax: Optional[float] = None
+    Pmin: Optional[float] = None
+    Qmax: Optional[float] = None
+    Qmin: Optional[float] = None
 
-    Vector & names:
-      • vectors are concatenated in feature order; empty vectors are skipped.
-      • names are concatenated in the same order; 1:1 parity enforced per feature.
-      • prefix_names=True prepends '<ClassName>.' to each child's names.
-    """
-    phase_model: PhaseModel = PhaseModel.BALANCED_1PH
-    phase_spec: PhaseSpec = field(default_factory=PhaseSpec)
-    features: List[FeatureProvider] = field(default_factory=list)
-    prefix_names: bool = False
+    shutting: Optional[int] = None
+    starting: Optional[int] = None
 
-    def __post_init__(self):
-        self._validate_phase_context_()
-        self._apply_phase_context_to_features_()
+    soc: Optional[float] = None
 
-    def _iter_ready_features(self) -> Iterator[FeatureProvider]:
-        for f in self.features:
-            yield f
+    # Shunt
+    max_step: Optional[int] = None
+    step: Optional[np.ndarray] = None  # one-hot length = max_step+1
 
-    def _validate_phase_context_(self) -> None:
-        """Validate phase context configuration."""
-        if self.phase_model == PhaseModel.THREE_PHASE:
-            if not isinstance(self.phase_spec, PhaseSpec):
-                raise ValueError("THREE_PHASE requires a PhaseSpec.")
-            n = self.phase_spec.nph()
-            if n not in (1, 2, 3):
-                raise ValueError("THREE_PHASE PhaseSpec must have 1, 2, or 3 phases.")
-        elif self.phase_model == PhaseModel.BALANCED_1PH:
-            # Allow None; if provided, must be single-phase
-            if self.phase_spec is not None and self.phase_spec.nph() > 1:
-                raise ValueError("BALANCED_1PH cannot use a multi-phase PhaseSpec.")
-        else:
-            raise ValueError(f"Unsupported phase model: {self.phase_model}")
+    # Transformer
+    tap_max: Optional[int] = None
+    tap_min: Optional[int] = None
+    tap_position: Optional[int] = None
 
-    def _apply_phase_context_to_features_(self) -> None:
-        """Override children with the authoritative phase context."""
-        for f in self.features:
-            # 1) Override phase_model if attribute exists
-            if hasattr(f, "phase_model"):
-                try:
-                    setattr(f, "phase_model", self.phase_model)
-                except Exception:
-                    pass
+    # Transformer loading
+    loading_percentage: Optional[float] = None
 
-            # 2) Override phase_spec if attribute exists
-            if hasattr(f, "phase_spec"):
-                try:
-                    if self.phase_model == PhaseModel.BALANCED_1PH:
-                        setattr(f, "phase_spec", None)
-                    else:
-                        setattr(f, "phase_spec", self.phase_spec)
-                except Exception:
-                    pass
+    # Grid price
+    price: Optional[float] = None
 
-            # 3) Re-validate under final context
-            for meth in ("revalidate_after_context",
-                         "_validate_inputs_",
-                         "_ensure_shapes",
-                         "_ensure_shapes_"):
-                if hasattr(f, meth) and callable(getattr(f, meth)):
-                    getattr(f, meth)()
-                    break
+    def as_vector(self) -> np.ndarray:
+        state = np.array([], dtype=np.float32)
+        if self.Pmax is not None:
+            state = np.append(state, self.P)
+        if self.Qmax is not None:
+            state = np.append(state, self.Q)
+        if self.price is not None:
+            state = np.append(state, float(self.price) / 100.)
 
-    def vector(self) -> Array:
-        vecs: List[np.ndarray] = []
-        for f in self._iter_ready_features():
-            v, _ = _vec_names(f)
-            if v.size:
-                vecs.append(v)
-        if not vecs:
-            return np.zeros(0, np.float32)
-        return np.concatenate(vecs, dtype=np.float32)
+        if self.shutting is not None:
+            on_state = np.zeros(2, dtype=np.float32)
+            on_state[1 if self.on else 0] = 1
+            state = np.concatenate([state, on_state])
+            state = np.append(state, float(self.shutting))
 
-    def names(self) -> List[str]:
-        out: List[str] = []
-        for f in self._iter_ready_features():
-            _, n = _vec_names(f)
-            if self.prefix_names and n:
-                pref = f.__class__.__name__ + "."
-                n = [pref + s for s in n]
-            out += n
-        return out
+        if self.starting is not None:
+            state = np.append(state, float(self.starting))
 
-    def clamp_(self) -> None:
-        for f in self._iter_ready_features():
-            if hasattr(f, "clamp_"):
-                f.clamp_()
+        if self.soc is not None:
+            state = np.append(state, float(self.soc))
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "phase_model": (
-                self.phase_model.value
-                if isinstance(self.phase_model, PhaseModel) else str(self.phase_model)
-            ),
-            "phase_spec": (
-                None if self.phase_spec is None else {
-                    "phases": self.phase_spec.phases,
-                    "has_neutral": self.phase_spec.has_neutral,
-                    "earth_bond": self.phase_spec.earth_bond,
-                }
-            ),
-            "prefix_names": self.prefix_names,
-            "features": [
-                {
-                    "kind": f.__class__.__name__,
-                    "payload": (
-                        f.to_dict() if hasattr(f, "to_dict") else asdict(f)
-                    ),
-                }
-                for f in self.features
-            ],
-        }
-
-    @classmethod
-    def from_dict(
-        cls,
-        d: Dict[str, Any],
-        registry: Optional[Dict[str, Type[FeatureProvider]]] = None,
-    ) -> "DeviceState":
-        pm = d.get("phase_model", PhaseModel.THREE_PHASE)
-        pm = pm if isinstance(pm, PhaseModel) else PhaseModel(pm)
-
-        psd = d.get("phase_spec", None)
-        if psd is None:
-            ps = None
-        elif isinstance(psd, PhaseSpec):
-            ps = psd
-        else:
-            ps = PhaseSpec(
-                psd.get("phases", "ABC"),
-                psd.get("has_neutral", False),
-                psd.get("earth_bond", True),
+        if self.max_step is not None:
+            step_vec = (
+                self.step
+                if isinstance(self.step, np.ndarray)
+                else np.zeros(self.max_step + 1, dtype=np.float32)
             )
+            state = np.append(state, step_vec)
 
-        reg = registry or KNOWN_FEATURES
-        feats: List[FeatureProvider] = []
-        for item in d.get("features", []):
-            kind = item.get("kind")
-            payload = item.get("payload", {})
-            cls_ = reg.get(kind)
-            if cls_ is None:
-                raise ValueError(
-                    f"Unknown feature kind '{kind}'. Provide a registry mapping."
-                )
-            if hasattr(cls_, "from_dict"):
-                feats.append(cls_.from_dict(payload))  # type: ignore
-            else:
-                feats.append(cls_(**payload))          # type: ignore
+        if self.tap_max is not None and self.tap_min is not None:
+            count = self.tap_max - self.tap_min + 1
+            one_hot = np.zeros(count, dtype=np.float32)
+            pos = (self.tap_position if self.tap_position is not None else self.tap_min) - self.tap_min
+            pos = int(np.clip(pos, 0, count - 1))
+            one_hot[pos] = 1
+            state = np.append(state, one_hot)
 
-        ds = cls(
-            phase_model=pm,
-            phase_spec=ps,
-            features=feats,
-            prefix_names=d.get("prefix_names", False),
-        )
-        # Defensive: apply again post-build
-        ds._validate_phase_context_()
-        ds._apply_phase_context_to_features_()
-        return ds
+        if self.loading_percentage is not None:
+            state = np.append(state, float(self.loading_percentage) / 100.0)
+
+        return state

@@ -1,0 +1,64 @@
+network: powergrid.networks.ieee13:IEEE13Bus
+
+time:
+  horizon: 24
+  days: 366
+
+limits:
+  vmin: 0.95
+  vmax: 1.05
+  s_slack_max: 5.0          # MVA (or consistent p.u.)
+  pf_min: 0.8               # for controllable generators
+
+storage_defaults:
+  eta_ch: 0.98
+  eta_dch: 0.98
+
+# Named bus-based resources (you can add/delete freely)
+generators:
+  # id: {bus: <bus name>, p_min, p_max, q_min, q_max, cost: {a,b,c}}
+  DG1:
+    bus: "Bus 675"
+    p_min: 0.0
+    p_max: 0.4
+    q_min: -0.3
+    q_max:  0.3
+    cost: {a: 100.0, b: 51.6, c: 0.4615}
+  DG2:
+    bus: "Bus 611"
+    p_min: 0.0
+    p_max: 0.5
+    q_min: -0.375
+    q_max:  0.375
+    cost: {a: 100.0, b: 72.4, c: 0.5011}
+
+slack:
+  bus: "Bus 650"            # grid interconnect (P,Q bounded by s_slack_max)
+  sell_discount: 0.9        # e.g., export paid at 90% of buy price
+
+storage:
+  # id: {bus, e_min, e_max, p_max, e_init}
+  ESS1: {bus: "Bus 645", e_min: 0.3, e_max: 2.7, p_max: 0.5, e_init: 0.5}
+
+capacitors:
+  # id: {bus, q_mvar, max_step}
+
+regulators:
+  # id: {bus, q_mvar, max_step}
+
+renewables:
+  # id: {bus, source: <solar|wind|custom:NAME>, scale}
+  PV1: {bus: "Bus 652", source: "solar", scale: 0.50}
+  WT1: {bus: "Bus 645", source: "wind",  scale: 0.50}
+
+data:
+  adapter: microgrid.misocp.data_io:SimplePickleAdapter
+  args:
+    base_dir: "/Users/hepeng.li/Library/CloudStorage/OneDrive-UniversityofMaineSystem/code/python/powergrid/data"
+    file: "data2023-2024.pkl"
+    split: "test"
+    load_key: "AVA"
+    solar_key: "NP15"
+    wind_key: "NP15"
+    price_key: "0096WD_7_N001"
+    load_scale: 0.6     # multiply raw loads by this factor

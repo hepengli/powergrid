@@ -1,7 +1,5 @@
 import pandapower as pp
-
 from powergrid.networks.lines import *
-
 
 def IEEE13Bus(name=''):
     """
@@ -50,6 +48,9 @@ def IEEE13Bus(name=''):
     pp.create_line(net, bus_692, bus_675, length_km=0.1524, std_type='CF-606', name='{}Line 9'.format(name))
 
     pp.create_switch(net, bus=bus_671,  element=bus_692, et='b', type="LS", z_ohm=0.0, name='{}Switch 1'.format(name))
+    
+    # # must convert a switch to a line to use net._ppc
+    # pp.create_line(net, bus_671, bus_692, length_km=0.001, std_type='CF-606', name='{}Line switch'.format(name))
 
     # Substation
     pp.create_transformer_from_parameters(net, bus_650, bus_632, sn_mva=5, vn_hv_kv=24.9,

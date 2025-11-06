@@ -1,4 +1,0 @@
-Protocol Guide
-==============
-
-Coming soon...

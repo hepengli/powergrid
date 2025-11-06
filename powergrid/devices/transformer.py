@@ -1,13 +1,11 @@
-from typing import Any, Optional, Dict
+from typing import Optional
 
-from powergrid.agents.device_agent import DeviceAgent
-from powergrid.core.protocols import NoProtocol, Protocol
-from powergrid.core.policies import Policy
-from powergrid.utils.cost import tap_change_cost
-from powergrid.utils.safety import loading_over_pct
+from .base import Device
+from ..utils.cost import tap_change_cost
+from ..utils.safety import loading_over_pct
 
 
-class Transformer(DeviceAgent):
+class Transformer(Device):
     """On-load tap changer (OLTC) transformer — **controllable**, not passive.
 
     Discrete action selects tap index in [tap_min, tap_max]. Optional
@@ -23,38 +21,26 @@ class Transformer(DeviceAgent):
         tap_min: Optional[int] = None,
         dt: float = 1.0,
         tap_change_cost: float = 0.0,
-        # Base class args
-        policy: Optional[Policy] = None,
-        protocol: Protocol = NoProtocol(),
-        device_config: Dict[str, Any] = {},
     ) -> None:
+        super().__init__()
         self.name = name
         self.sn_mva = sn_mva
         self.tap_max = tap_max
         self.tap_min = tap_min
         self.dt = float(dt)
         self.tap_change_cost = float(tap_change_cost)
-        self._last_tap_position = self.state.tap_position
-
-        super().__init__(
-            agent_id=name,
-            policy=policy,
-            protocol=protocol,
-            device_config=device_config,
-        )
-
-    def set_action_space(self) -> None:
-        if self.tap_max is not None and self.tap_min is not None:
-            self.action.ncats = self.tap_max - self.tap_min + 1
+        self.state.loading_percentage = 0.0
+        self.state.tap_position = tap_min if tap_min is not None else 0
+        if tap_max is not None and tap_min is not None:
+            self.state.tap_max = tap_max
+            self.state.tap_min = tap_min
+            self.action.ncats = tap_max - tap_min + 1
             self.action.dim_d = 1
             self.action.sample()
+        self._last_tap_position = self.state.tap_position
 
-    def set_device_state(self, config: Dict[str, Any]) -> None:
-        self.state.loading_percentage = 0.0
-        self.state.tap_position = self.tap_min if self.tap_min is not None else 0
-        if self.tap_max is not None and self.tap_min is not None:
-            self.state.tap_max = self.tap_max
-            self.state.tap_min = self.tap_min
+    def set_action_space(self) -> None:
+        return None
 
     def update_state(self) -> None:
         if self.tap_max is not None and self.tap_min is not None and self.action.d.size:
@@ -69,7 +55,7 @@ class Transformer(DeviceAgent):
         self.cost = tap_change_cost(delta, self.tap_change_cost)
         self._last_tap_position = self.state.tap_position
 
-    def reset_device(self, rnd=None) -> None:
+    def reset(self, rnd=None) -> None:
         self.state.loading_percentage = 0.0
         self.state.tap_position = self.tap_min if self.tap_min is not None else 0
         self._last_tap_position = self.state.tap_position

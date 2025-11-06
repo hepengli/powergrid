@@ -1,20 +1,20 @@
-import os
-import pickle
-from collections import OrderedDict
-from os.path import abspath, dirname
-
+import os, pickle
 import numpy as np
 import pandapower as pp
 
-from deprecated.base_env import GridBaseEnv
+from os.path import dirname, abspath
+from collections import OrderedDict
+
+from powergrid.base_env import GridBaseEnv
 from powergrid.devices import *
+from powergrid.networks.modified_cigre_mv import create_cigre_network_mv
 
 def read_data(train, load_area, renew_area, price_area):
     dir = dirname(dirname(dirname(dirname(abspath(__file__)))))
-    dir = "/Users/hepeng.li/Library/CloudStorage/OneDrive-UniversityofMaineSystem/code/python/powergrid"
     data_dir = os.path.join(dir, 'data', 'data2023-2024.pkl')
     with open(data_dir, 'rb') as file:
         dataset = pickle.load(file)
+
     return {
         'load' : dataset[train]['load'][load_area],
         'solar': dataset[train]['solar'][renew_area],
@@ -25,13 +25,13 @@ def read_data(train, load_area, renew_area, price_area):
 class CIGREMVEnv(GridBaseEnv):
     def _build_net(self):
         self.area = ""
-        net = pp.networks.create_cigre_network_mv(with_der="all")
+        net = create_cigre_network_mv()
         net.area = self.area
         # Register devices (names must be unique per area)
-        RFC_1 = DG('Residential fuel cell 1', bus='Bus 5', min_p_mw=0, max_p_mw=0.033, sn_mva=0.033, cost_curve_coefs=[100, 51.6, 0.5011])
-        RFC_2 = DG('Residential fuel cell 2', bus='Bus 10', min_p_mw=0, max_p_mw=0.014, sn_mva=0.014, cost_curve_coefs=[100, 72.4, 0.4615])
-        FC    = DG('Fuel cell', bus='Bus 9', min_p_mw=0, max_p_mw=0.212, sn_mva=0.212, cost_curve_coefs=[100, 40.7, 1.1532])
-        CHP   = DG('CHP diesel', bus='Bus 9', min_p_mw=0, max_p_mw=0.310, sn_mva=0.310, cost_curve_coefs=[100, 35.8, 1.3156])
+        RFC_1 = DG('Residential fuel cell 1', bus='Bus 5', min_p_mw=0, max_p_mw=0.033, sn_mva=0.033, cost_curve_coefs=[30, 92.6, 3.21])
+        RFC_2 = DG('Residential fuel cell 2', bus='Bus 10', min_p_mw=0, max_p_mw=0.014, sn_mva=0.014, cost_curve_coefs=[30, 85.4, 4.73])
+        FC    = DG('Fuel cell', bus='Bus 9', min_p_mw=0, max_p_mw=0.212, sn_mva=0.212, cost_curve_coefs=[60, 70.7, 3.52])
+        CHP   = DG('CHP diesel', bus='Bus 9', min_p_mw=0, max_p_mw=0.310, sn_mva=0.310, cost_curve_coefs=[50, 65.8, 5.51])
         PV_3 = RES('PV 3', source='solar', bus='Bus 3', sn_mva=0.02)
         PV_4 = RES('PV 4', source='solar', bus='Bus 4', sn_mva=0.02)
         PV_5 = RES('PV 5', source='solar', bus='Bus 5', sn_mva=0.03)
@@ -108,8 +108,8 @@ class CIGREMVEnv(GridBaseEnv):
 
 
 if __name__ == '__main__':
-    from powergrid.envs.single_agent.cirgre_mv import CIRGEMVEnv
-    env = CIRGEMVEnv(env_config={})
+    from powergrid.envs.single_agent.cigre_mv import CIGREMVEnv
+    env = CIGREMVEnv(env_config={})
     obs, info = env.reset()
     action = env.action_space.sample()
     obs, reward, terminated, truncated, info = env.step(action)

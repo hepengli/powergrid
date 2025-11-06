@@ -1,7 +1,5 @@
 import pandapower as pp
-
 from powergrid.networks.lines import *
-
 
 def IEEE34Bus(name=''):
     """
@@ -100,14 +98,14 @@ def IEEE34Bus(name=''):
                                           pfe_kw=0.0, i0_percent=0.0, shift_degree=0.0,
                                           tap_side='lv', tap_neutral=0, tap_max=16, tap_min=-16, 
                                           tap_step_percent=0.625, tap_pos=12, tap_phase_shifter=False,
-                                          name='{}Regulator 1'.format(name))
+                                          name='{}Regulator1'.format(name))
     # Regulator 2
     pp.create_transformer_from_parameters(net, bus_852, bus_RG11, sn_mva=2.5, vn_hv_kv=24.9,
                                           vn_lv_kv=24.9, vkr_percent=0.320088*2.5, vk_percent=0.357539*2.5,
                                           pfe_kw=0.0, i0_percent=0.0, shift_degree=0.0,
                                           tap_side='lv', tap_neutral=0, tap_max=16, tap_min=-16, 
                                           tap_step_percent=0.625, tap_pos=16, tap_phase_shifter=False,
-                                          name='{}Regulator 2'.format(name))
+                                          name='{}Regulator2'.format(name))
     # # Substation
     # pp.create_transformer_from_parameters(net, bus_0, bus_800, sn_mva=2.5, vn_hv_kv=69.0,
     #                                       vn_lv_kv=24.9, vkr_percent=1.0, vk_percent=8.062257,
@@ -119,7 +117,7 @@ def IEEE34Bus(name=''):
     pp.create_transformer_from_parameters(net, bus_832, bus_888, sn_mva=0.5, vn_hv_kv=24.9,
                                           vn_lv_kv=4.16, vkr_percent=1.9, vk_percent=4.5,
                                           pfe_kw=0.0, i0_percent=0.0, shift_degree=0.0,
-                                          name='{}Transformer 1'.format(name))
+                                          name='{}Transformer1'.format(name))
 
     # Loads
     pp.create_load(net, bus_806, p_mw=0.055, q_mvar=0.029, name='{}Load 806'.format(name))
@@ -163,8 +161,8 @@ def IEEE34Bus(name=''):
     # pp.create_sgen(net, bus_838, p_mw=0., type='WP', name='WP 3', max_p_mw=0.1, min_p_mw=0, max_q_mvar=0, min_q_mvar=0)
 
     # Shunt capacity bank
-    pp.create_shunt_as_capacitor(net, bus_844, q_mvar=-0.30, name='SCB 1', step=0, max_step=4, loss_factor=0.0)
-    pp.create_shunt_as_capacitor(net, bus_848, q_mvar=-0.45, name='SCB 2', step=0, max_step=4, loss_factor=0.0)
+    pp.create_shunt_as_capacitor(net, bus_844, q_mvar=-0.30, name='SCB1', step=0, max_step=4, loss_factor=0.0)
+    pp.create_shunt_as_capacitor(net, bus_848, q_mvar=-0.45, name='SCB2', step=0, max_step=4, loss_factor=0.0)
 
     # # # storage
     # pp.create_storage(net, bus_810, p_mw=0.0, max_e_mwh=2, sn_mva=1.0, soc_percent=50, min_e_mwh=0.2, name='Storage')

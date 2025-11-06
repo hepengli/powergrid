@@ -1,14 +1,13 @@
-import os
-import pickle
-from collections import OrderedDict
-from os.path import abspath, dirname
-
+import os, pickle
 import numpy as np
 import pandapower as pp
 
-from deprecated.base_env import GridBaseEnv
-from powergrid.devices import *
+from os.path import dirname, abspath
+from collections import OrderedDict
+
+from powergrid.base_env import GridBaseEnv
 from powergrid.networks.ieee13 import IEEE13Bus
+from powergrid.devices import *
 
 def read_data(train, load_area, renew_area, price_area):
     dir = dirname(dirname(dirname(dirname(abspath(__file__)))))
@@ -106,7 +105,7 @@ class IEEE13Env(GridBaseEnv):
 
 
 if __name__ == '__main__':
-    from powergrid.envs.single_agent.my_env import IEEE13Env
+    from powergrid.envs.single_agent.ieee13_mg import IEEE13Env
     env = IEEE13Env(env_config={})
     obs, info = env.reset()
     action = env.action_space.sample()

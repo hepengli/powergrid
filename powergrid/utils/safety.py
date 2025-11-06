@@ -1,6 +1,6 @@
-import math
 from dataclasses import dataclass
 from typing import Optional
+import math
 
 def s_over_rating(P: float, Q: float, sn_mva: Optional[float]) -> float:
     """Apparent power (S) overload as a fraction of nameplate.

@@ -21,43 +21,17 @@ It provides modular device models (DG, RES, ESS, Shunt, Transformer, Grid) with 
 
 ## Installation
 
-### Option 1: Install from PyPI (coming soon)
+### Conda (recommended on macOS/Ubuntu)
 
 ```bash
-pip install powergrid
-```
-
-### Option 2: Install from source
-
-```bash
-# Clone the repository
-git clone https://github.com/hepengli/powergrid.git
-cd powergrid
-
-# Install in editable mode for development
-pip install -e .
-
-# Or install with dev dependencies
-pip install -e ".[dev]"
-```
-
-### Option 3: Python venv (recommended for isolation)
-
-```bash
-# Create a virtual environment
-python3 -m venv .venv
-
-# Activate the environment
-# On macOS/Linux:
-source .venv/bin/activate
-# On Windows:
-# .venv\Scripts\activate
-
-# Upgrade pip
+# Create an environment
+conda create -n powergrid python=3.12 -y
+conda activate powergrid
 pip install -U pip
-
-# Install from source
 pip install -e .
+
+# Or direct setup with pip
+pip install -r requirements.txt
 ```
 
 # Quick Start
