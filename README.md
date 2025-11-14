@@ -1,4 +1,4 @@
-# AGENS: Agent-centric Grid Edge Network Simulator
+# AGENS: An Agent-centric Grid Edge Network Simulator
 
 A lightweight, production-style **Gymnasium** environment for **power grid control**, built on [pandapower](https://www.pandapower.org/).  
 It provides modular device models (DG, RES, ESS, Shunt, Transformer, Grid) with clean action/observation spaces, centralized safety metrics, and pluggable rewards — designed for Reinforcement Learning (RL) and Multi-Agent RL research.
