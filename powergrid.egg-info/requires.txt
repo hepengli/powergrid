@@ -1,0 +1,10 @@
+gymnasium
+pandapower
+numpy
+pandas
+
+[dev]
+pytest
+ruff
+black
+mypy
